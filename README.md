@@ -92,6 +92,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | 2x RX 9070 16GB (Vulkan) | 22.1 | 41.6 | 2 | 0.73 | [@tomertec](https://github.com/tomertec) |
 | AMD Radeon AI PRO R9700 32GB | 27.0 | 43.3 | 2 | 0.60-0.94 | [@ajnytebot](https://github.com/ajnytebot) |
 | Ryzen AI Max+ 395 / Radeon 8060S | 11.5 | 23.7 | 2 | 0.52-0.94 | [@shiwuxiu](https://github.com/shiwuxiu) |
+| 3× RTX 3060 12GB (layer split) | 17.3 | 24.5 | 8 | 0.87 | [@EamonMcKiernan05](https://github.com/EamonMcKiernan05) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -101,6 +102,7 @@ Ran the A/B on your card? Open a PR and add a row.
 \* R9700 row: unsloth UD-Q4_K_XL, 262K context, q4_0 KV cache, llama.cpp b10433, Vulkan/RADV — 22.53 GB VRAM baseline, 24.55 GB with n-max 2. Method: unchanged `probe.py` at commit `67c20536`, three runs x three prompts, thinking off.
 \* Ryzen AI Max+ 395 row: 64GB unified memory, unsloth UD-Q4_K_XL, 32K context, q8_0 KV cache, llama.cpp b10437, Windows build 26200, Vulkan with AMD driver 32.0.31035.1003. Method: unchanged `probe.py` at commit `67c2053`, three runs x three prompts, thinking off.
 \* RTX 4090 Spadav_ row: unsloth Q4_K_M, 200K context, q4_0 KV cache, q8_0 draft KV, mmproj loaded (888MB on GPU) — method: stock probe.py + 4096-token curl (MTP crossover: overhead dominates at ≤400 tokens, +60% at 4096 tokens).
+\* 3×3060 row: unsloth UD-Q4_K_XL, 262K context, q8_0 KV cache, layer split `--split-mode layer --tensor-split 35,37,28` (no NVLink), llama.cpp b10068, `--parallel 1`, `--spec-draft-n-max 8 --spec-draft-p-min 0.85`. Method differs from the rows above: **serve-timing averages from llama-server logs, not `probe.py`** — baseline = weighted mean of 126K decoded tokens with MTP off (17.3 t/s); with flag = weighted mean over 23.4M decoded tokens of live traffic (24.5 t/s, short bursts 28-39 t/s, long-context drops to 14-16 t/s). Acceptance = aggregate 0.87 (176,446/202,620 drafted tokens, per-task median 0.884, range 0.70-1.00) from `draft acceptance` log lines.
 
 ### A6000 48GB: n-max sweep
 
