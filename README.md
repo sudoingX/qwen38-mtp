@@ -120,6 +120,7 @@ Ran the A/B on your card? Open a PR and add a row.
 \* RX 9070 row: two 16GB cards on one 31.84 GiB pool, Vulkan build b10426, unsloth UD-Q4_K_XL, **262K context**, q8_0 KV cache — 28.0 GiB across the pool with spec. Method differs from the rows above and is spelled out under the sweep below.
 \* R9700 row: unsloth UD-Q4_K_XL, 262K context, q4_0 KV cache, llama.cpp b10433, Vulkan/RADV — 22.53 GB VRAM baseline, 24.55 GB with n-max 2. Method: unchanged `probe.py` at commit `67c20536`, three runs x three prompts, thinking off.
 \* Ryzen AI Max+ 395 row: 64GB unified memory, unsloth UD-Q4_K_XL, 32K context, q8_0 KV cache, llama.cpp b10437, Windows build 26200, Vulkan with AMD driver 32.0.31035.1003. Method: unchanged `probe.py` at commit `67c2053`, three runs x three prompts, thinking off.
+\* RX 7900 GRE row: custom AtomicChat IQ3_XXS quant (not unsloth Q4_K_M), 90K context, turbo3/turboquant KV cache, llama.cpp 1655 (2168b0cd8) in a custom llama-cpp-turboquant Docker image, Debian 13 trixie, kernel 6.12.101, Vulkan/AMD Navi 31, --parallel 1, --reasoning-budget 512, flash-attn on. VRAM 15.35 GB / 16 GB (~96%) at measurement. No spec-off baseline was run on this card — the model was deployed spec-on from the start, hence the N/A cell. Method differs from the rows above and is spelled out below.
 \* RTX 4090 Spadav_ row: unsloth Q4_K_M, 200K context, q4_0 KV cache, q8_0 draft KV, mmproj loaded (888MB on GPU) — method: stock probe.py + 4096-token curl (MTP crossover: overhead dominates at ≤400 tokens, +60% at 4096 tokens).
 \* Radeon 890M row: Ryzen AI 9 HX 370 (Strix Point, gfx1150), 48 GB UMA carve of 96 GB DDR5, unsloth UD-Q4_K_XL, **131K context**, q4_0 KV cache, llama.cpp Vulkan/RADV, Ubuntu 26.04 — 19.15 GB VRAM baseline, 20.13 GB with n-max 2. Method: unchanged `probe.py`, three runs x three prompts, thinking off. Note this is a *different* APU class from the Ryzen AI Max+ 395 row above: Strix Point 890M is 16 CUs on a 128-bit bus, Strix Halo 8060S is 40 CUs on 256-bit, and this row holds 131K context resident against that row's 32K — both differences push this baseline down.
 \* RTX PRO 6000 row: unsloth Q4_K_M, 131K context, q4_0 KV cache, llama.cpp b10335, CUDA — method: stock `probe.py`, thinking off, `--parallel 1` both sides. n-max 4 on this card: 85.7 overall (code 105.7 up, prose 58.8 down, acceptance 0.65-0.77) — overall peaks at n-max 2 here, same code-up/prose-down shape as the A6000 and 3×3090 sweeps. Cross-engine bonus on the same card: vLLM 0.27.1 with unsloth's NVFP4 build and MTP (`--speculative-config '{"method":"mtp","num_speculative_tokens":N}'`) gives 63.3 -> 96.1 at n=2 and 116.3 (+84%) at n=4 — vLLM keeps climbing where llama.cpp has peaked. (An earlier revision carried a streamed-word-drop caveat for vLLM MTP; it was traced to the benchmark harness's own SSE parsing — a grep regex truncating multi-token deltas at escaped quotes — not to vLLM. Retracted with verification at [vllm-project/vllm#52469](https://github.com/vllm-project/vllm/issues/52469), closed; streamed output is byte-identical to non-streamed with MTP on.)
@@ -401,6 +402,43 @@ unassisted at `--parallel 2`; at `--parallel 1`, same everything else, it is
 69.3. **`--parallel 2` alone costs ~20% of single-stream decode.** Pairing an
 MTP arm against a `--parallel 2` baseline reads as +133% when the honest figure
 is +86%. Measure both arms at `--parallel 1`.
+
+### RX 7900 GRE 16GB: packed-16GB live-traffic study (no spec-off baseline)
+
+Same host, same model, same serve, only the spec flags varying. The card runs the custom AtomicChat IQ3_XXS quant at 90K context with turbo3/turboquant KV — VRAM sits at 15.35 GB of 16 GB (~96%), so this is the tightest 16 GB rig in the table, and the config was tuned for a live Hermes agent session, not a clean probe run.
+
+Live serve, one slot (`-np 1`), `--spec-type draft-mtp --spec-draft-n-max 3 --spec-draft-p-min 0.75`. Decode speeds and draft acceptance from the server log over eight consecutive real agent turns (context growing 29.2K → 37.0K tokens between turns):
+
+| Task | Output | Decode | Acceptance | Mean draft len |
+|---|---|---|---|---|
+| 1436 | 700 tok | 51.8 tok/s | 0.930 | 3.46 |
+| 1671 | 310 tok | 47.7 tok/s | 0.932 | 3.13 |
+| 1795 | 109 tok | 44.8 tok/s | 0.903 | 3.32 |
+| 1844 | 778 tok | 53.8 tok/s | 0.964 | 3.71 |
+| 2090 | 482 tok | 50.2 tok/s | 0.940 | 3.46 |
+| 2260 | 150 tok | 36.6 tok/s | 0.872 | 2.55 |
+| 2347 | 751 tok | 52.6 tok/s | 0.962 | 3.70 |
+| 2577 | 472 tok | 44.5 tok/s | 0.905 | 3.25 |
+
+Average decode **47.8 tok/s** (best 53.8, worst 36.6 — the 150-token turn, where the spec overhead dominates exactly as the length rule predicts). Acceptance band **0.87–0.96, average ~0.93**; mean draft length 2.55–3.71, i.e. n-max 3 was almost fully consumed. Prompt processing held 239–314 tok/s (3.3–4.2 ms/token) across the 29K–37K context growth. Vulkan compute-graph reuse climbed 757 → 1420 over the session.
+
+No spec-off baseline was run on this card: the model was deployed spec-on from the start, so the "Baseline" cell above is N/A rather than a measured number.
+
+**p-min 0.60 vs 0.75, A/B on the same serve** (container restarted between arms, same 400-token probe plus live agent traffic):
+
+| setting | Acceptance | Decode | Verdict |
+|---|---|---|---|
+| **p-min 0.75 (n-max 3)** | 0.87–0.96, avg ~0.93 | ~47–48 tok/s | **shipped** |
+| p-min 0.60 (n-max 3) | 0.67–0.77 | ~50.5 tok/s idle, +7% | rejected |
+
+At 0.60 the head drafts past its confidence gate and acceptance drops ~0.15–0.25; the speed gain is a flat ~7% idle and the long-turn acceptance collapses to 0.67 under real traffic. This card is the counterpoint to the RX 9070 pair's finding that 0.60 "makes deeper n-max nearly free": with 16 GB at 96% VRAM and n-max 3, the gate at 0.75 already keeps rejection cheap, and loosening it just buys noise. The 0.60 number is also a single-run screen (the 9070 section's own warning applies: medians of 3 before deploying), but the acceptance delta is too large to ignore.
+
+What this row adds to the table:
+
+- **n-max 3 holds as a daily driver at 0.93 average acceptance on RDNA3 16 GB** — the 5090 sweep's "run 2 as your daily" did not apply here; at 0.75 the third draft slot was accepted almost all the time, so there was nothing to give back.
+- **VRAM headroom is a hidden variable.** Every row in this table runs with 40%+ of the card's VRAM free; this one runs at 96%. The acceptance and speed bands above are what MTP does on a fully packed 16 GB card, not a comfortable 24 GB one.
+- **The p-min knob is workload- and VRAM-dependent**, not just card-size-dependent: 0.60 won on the 2×9070 pool, 0.75 wins here.
+>>>>>>> 116a9fe (Add RX 7900 GRE 16GB (Vulkan) row + p-min 0.60 vs 0.75 A/B on a packed 16GB card)
 
 ## License
 
