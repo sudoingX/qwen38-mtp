@@ -1,12 +1,12 @@
 # Qwen3.8-27B MTP: the flag was free the whole time
 
-One llama.cpp flag unlocks +33% to +107% decode speed for Qwen3.8-27B on consumer GPUs, depending on the card. No new files, no conversion, no custom build. The MTP head already ships inside the GGUF you downloaded on launch night.
+One llama.cpp flag unlocks +33% to +118% decode speed for Qwen3.8-27B on consumer GPUs, depending on the card. No new files, no conversion, no custom build. The MTP head already ships inside the GGUF you downloaded on launch night.
 
-Opened hours after the Aug 14 2026 release. Within the first day the community grew it into a living record: **ten machines, eight contributors, every GPU vendor, and three tuning rules nobody knew at launch**, see [Community numbers](#community-numbers).
+Opened hours after the Aug 14 2026 release. Within the first day the community grew it into a living record: **eleven machines, nine contributors, every GPU vendor, and three tuning rules nobody knew at launch**, see [Community numbers](#community-numbers).
 
 ## The numbers
 
-The two founding rows, measured the night of the drop. The full living table (10 machines, all vendors) lives in [Community numbers](#community-numbers).
+The two founding rows, measured the night of the drop. The full living table (11 machines, all vendors) lives in [Community numbers](#community-numbers).
 
 | Card | Baseline | With the flag | Gain | Acceptance |
 |---|---|---|---|---|
@@ -84,6 +84,7 @@ Ran the A/B on your card? Open a PR and add a row.
 |---|---|---|---|---|---|
 | RTX 3090 24GB | 31.0 | 41.3 | 2 | 0.78 | [@sudoingX](https://x.com/sudoingX) |
 | RTX 5090 mobile 24GB | 36.7 | 50.9 | 2 | 0.79 | [@sudoingX](https://x.com/sudoingX) |
+| RTX 5090 32GB desktop (UD-Q5_K_XL) | 66.3 | 144.2 | 4 | 0.32-0.89 | [@TrickRiggin](https://github.com/TrickRiggin) |
 | RTX 4090 24GB | 47.7 | 76.3 | 2 | 0.56 | [@Spadav_](https://x.com/Spadav_) |
 | RTX A6000 48GB (Ada) | 26.7 | 52.5 | 2 | 0.54-0.98 | [@lingster](https://github.com/lingster) |
 | RX 7900 XTX 24GB | 30.7 | 43.9 | 2 | 0.60-0.95 | [@Jqianggu](https://x.com/Jqianggu) |
@@ -101,6 +102,7 @@ Ran the A/B on your card? Open a PR and add a row.
 \* R9700 row: unsloth UD-Q4_K_XL, 262K context, q4_0 KV cache, llama.cpp b10433, Vulkan/RADV — 22.53 GB VRAM baseline, 24.55 GB with n-max 2. Method: unchanged `probe.py` at commit `67c20536`, three runs x three prompts, thinking off.
 \* Ryzen AI Max+ 395 row: 64GB unified memory, unsloth UD-Q4_K_XL, 32K context, q8_0 KV cache, llama.cpp b10437, Windows build 26200, Vulkan with AMD driver 32.0.31035.1003. Method: unchanged `probe.py` at commit `67c2053`, three runs x three prompts, thinking off.
 \* RTX 4090 Spadav_ row: unsloth Q4_K_M, 200K context, q4_0 KV cache, q8_0 draft KV, mmproj loaded (888MB on GPU) — method: stock probe.py + 4096-token curl (MTP crossover: overhead dominates at ≤400 tokens, +60% at 4096 tokens).
+\* RTX 5090 desktop UD-Q5_K_XL row: 131K context, q4_0 KV cache, llama.cpp b10448 (`ad1de39e0`), Windows/CUDA 13.3. Loaded VRAM was 22,449 MiB baseline and 24,083 MiB at n-max 4. Method: unchanged `probe.py` at commit `b299c0f`, three runs x three prompts, thinking off, warmup discarded. N-max 2 reached 129.4 tok/s with 80.9% aggregate acceptance; n-max 4 reached 144.2 tok/s with 63.8% aggregate acceptance, a 117.5% gain over baseline. Only the MTP flags changed within each pair.
 
 ### A6000 48GB: n-max sweep
 
