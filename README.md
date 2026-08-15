@@ -92,6 +92,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | 2x RX 9070 16GB (Vulkan) | 22.1 | 41.6 | 2 | 0.73 | [@tomertec](https://github.com/tomertec) |
 | AMD Radeon AI PRO R9700 32GB | 27.0 | 43.3 | 2 | 0.60-0.94 | [@ajnytebot](https://github.com/ajnytebot) |
 | Ryzen AI Max+ 395 / Radeon 8060S | 11.5 | 23.7 | 2 | 0.52-0.94 | [@shiwuxiu](https://github.com/shiwuxiu) |
+| RTX 5090 32GB (desktop) | 61.4 | 135.0 | 4 | 0.38-0.87 | [@taco-devs](https://github.com/taco-devs) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -101,6 +102,7 @@ Ran the A/B on your card? Open a PR and add a row.
 \* R9700 row: unsloth UD-Q4_K_XL, 262K context, q4_0 KV cache, llama.cpp b10433, Vulkan/RADV — 22.53 GB VRAM baseline, 24.55 GB with n-max 2. Method: unchanged `probe.py` at commit `67c20536`, three runs x three prompts, thinking off.
 \* Ryzen AI Max+ 395 row: 64GB unified memory, unsloth UD-Q4_K_XL, 32K context, q8_0 KV cache, llama.cpp b10437, Windows build 26200, Vulkan with AMD driver 32.0.31035.1003. Method: unchanged `probe.py` at commit `67c2053`, three runs x three prompts, thinking off.
 \* RTX 4090 Spadav_ row: unsloth Q4_K_M, 200K context, q4_0 KV cache, q8_0 draft KV, mmproj loaded (888MB on GPU) — method: stock probe.py + 4096-token curl (MTP crossover: overhead dominates at ≤400 tokens, +60% at 4096 tokens).
+\* RTX 5090 desktop row: unsloth UD-Q4_K_XL, 192K context, q8_0 KV cache, llama-server self-built from the PR #26704 branch (master-equivalent for this path, CUDA arch 120), Windows 11 native — ~26.3 GB VRAM baseline, ~28.2 GB at n-max 4. Method differs from `probe.py`: server `timings.predicted_per_second` over 900-token generations, 2 runs x the same 3 prompts, thinking off, warmup discarded. Acceptance range is per-request (prose low end, Python high end), 0.60 aggregate.
 
 ### A6000 48GB: n-max sweep
 
@@ -173,6 +175,34 @@ Same 64GB Strix Halo system, same unsloth UD-Q4_K_XL model and serving config as
 | 4 | 23.5 | **29.9** | 16.5 | 23.5 | 0.35-0.91 (65.8% aggregate) |
 
 MTP n-max 2 doubles the overall median versus the 11.5 tok/s spec-off control (+106%). N-max 4 is effectively flat overall (-0.8% versus n-max 2), but the workload split is sharp: Python rises 18.7% while prose falls 13.6%. This system keeps n-max 2 for mixed use and treats n-max 4 as a code-specialized option.
+
+### RTX 5090 32GB desktop: n-max sweep, and where the p-min rule inverts
+
+Same config as the row above, `--spec-draft-n-max` swept off/1-6. Per-prompt means of 2 runs (tok/s), acceptance per-request from server timings:
+
+| n-max | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Acceptance |
+|---|---|---|---|---|---|
+| off | 61.4 | 61.6 | 61.3 | 61.5 | — |
+| 1 | 94.2 | 98.1 | 86.2 | 98.3 | 0.68-0.94 |
+| 2 | 118.9 | 130.1 | 99.0 | 127.7 | 0.56-0.92 |
+| 3 | 127.9 | 150.8 | 97.3 | 135.6 | 0.45-0.90 |
+| **4** | **135.0** | 162.6 | 95.3 | **147.0** | 0.38-0.87 |
+| 5 | 129.0 | 158.0 | 86.3 | 142.6 | 0.30-0.78 |
+| 6 | 127.5 | 160.1 | 78.5 | 143.9 | 0.27-0.76 |
+
+Same shape as every sweep above — code keeps climbing, prose peaks early, acceptance decays monotonically — but the desktop 5090 stretches rule 1 to its endpoint: the overall optimum is 4, the net gain is **+120%** over spec-off (the largest single-GPU delta in the table), and even n-max 6 still beats n-max 2. Verification on this card is cheap enough that deep drafts keep paying long after acceptance has collapsed.
+
+The same headroom **inverts rule 2**. `--spec-draft-p-min` swept at n-max 4, same method:
+
+| p-min | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Aggregate acceptance |
+|---|---|---|---|---|---|
+| **0.0** | **129.8** | 157.6 | **92.9** | 138.8 | 0.60 |
+| 0.3 | 131.3 | 164.0 | 85.5 | 144.5 | 0.62 |
+| 0.5 | 111.8 | 140.1 | 69.4 | 125.9 | 0.69 |
+| 0.7 | 95.9 | 118.9 | 58.9 | 109.9 | 0.80 |
+| 0.85 | 96.1 | 125.1 | 59.8 | 103.4 | 0.89 |
+
+Gating raises acceptance exactly as rule 2 says (0.60 → 0.89) and costs throughput the whole way past 0.3 — the 0.60-0.70 band that rescues n-max 4 on the RX 9070 pair loses 26% here, and prose loses the most. The two rules are one rule: p-min converts skipped drafts into plain decode rounds, which is a win only when your plain decode is bandwidth-starved and your verify batches hurt. On a card where verification is nearly free, every draft is worth attempting and acceptance is a vanity metric. Bandwidth-poor rigs: gate. Desktop Blackwell: leave p-min at 0 and draft deep.
 
 ## License
 
