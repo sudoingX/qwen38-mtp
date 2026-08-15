@@ -104,33 +104,40 @@ Ran the A/B on your card? Open a PR and add a row.
 \* Ryzen AI Max+ 395 row: 64GB unified memory, unsloth UD-Q4_K_XL, 32K context, q8_0 KV cache, llama.cpp b10437, Windows build 26200, Vulkan with AMD driver 32.0.31035.1003. Method: unchanged `probe.py` at commit `67c2053`, three runs x three prompts, thinking off.
 \* RTX 4090 Spadav_ row: unsloth Q4_K_M, 200K context, q4_0 KV cache, q8_0 draft KV, mmproj loaded (888MB on GPU) — method: stock probe.py + 4096-token curl (MTP crossover: overhead dominates at ≤400 tokens, +60% at 4096 tokens).
 
-### Radeon 890M iGPU (Strix Point): n-max sweep — the biggest MTP win in this table
+### Radeon 890M iGPU (Strix Point): n-max sweep — biggest gain here, and an unstable peak
 
-Same 890M, same config as the row above, `--spec-draft-n-max` swept 2-5 plus a no-flag baseline.
-Overall and per-prompt probe medians (tok/s), draft acceptance from the server log:
+Same 890M, same config as the row above, `--spec-draft-n-max` swept with a no-flag baseline.
+**Two independent runs, both with unchanged `probe.py`, identical flags, nothing else on the GPU.**
+Overall probe medians (tok/s):
 
-| n-max | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Acceptance |
-|---|---|---|---|---|---|
-| baseline (no flag) | 2.7 | 3.6 | 2.7 | 2.6 | - |
-| 2 | 5.7 | 6.0 | 4.6 | 5.7 | 0.59-0.91 |
-| 3 | 7.0 | 8.3 | 6.1 | 7.1 | 0.47-0.73 |
-| **4** | **7.4** | 11.8 | 6.4 | 7.4 | 0.35-0.69 |
-| 5 | 6.7 | 9.5 | 4.3 | 6.7 | 0.27-0.61 |
+| n-max | Run A (11:10) | Run B (14:04/15:14) | Acceptance (Run B) |
+|---|---|---|---|
+| baseline (no flag) | 2.6 | 2.7 | - |
+| 2 | 5.9 | 5.7 | 0.59-0.91 |
+| 3 | 7.5 | 7.0 | 0.47-0.73 |
+| 4 | 7.9 | **7.4** | 0.35-0.69 |
+| 5 | **8.5** | 6.7 | 0.27-0.61 |
+| 6 | 7.2 | not run | - |
 
-**Peak at n-max 4 — the same place the A6000 peaks, on hardware two orders of magnitude cheaper.**
-At the peak this is **+174%** over baseline (2.7 -> 7.4), the largest gain posted here; even the
-table's n-max 2 column is +111%. The shape is otherwise familiar: code climbs hardest (3.6 -> 11.8,
-3.3x), prose peaks earlier and falls away, acceptance decays monotonically from 0.59-0.91 down to
-0.27-0.61.
+🛑 **The two runs disagree on where the peak is — Run A says n-max 5, Run B says n-max 4 — so I am
+not claiming a peak for this card.** Baseline and n-max 2 reproduce to within 3% (2.6/2.7 and
+5.9/5.7), and the divergence widens with n, reaching **27% at n-max 5**. That is worth knowing on
+its own: on a bandwidth-shared iGPU whose clocks and memory contention move between runs, three
+runs x three prompts is not enough to resolve a peak, even though it is plenty for the n-max 2
+headline. Anyone sweeping on an APU should repeat the sweep before trusting an optimum.
 
-The reason an iGPU tops the gain column is the same reason its absolute numbers are last:
+**The table row above uses n-max 2, where both runs agree.** At that setting this is **+111%**;
+at whichever of 4/5 is the true optimum it is **+174% to +227%** — the largest gain posted here
+either way, on the slowest hardware in the table.
+
+Why an iGPU tops the gain column while sitting last on absolute throughput:
 **MTP pays in proportion to how bandwidth-starved decode already is.** A dense 27B on a 128-bit
 LPDDR5 bus is the most starved configuration in this table, so amortising the weight read across
 accepted drafts buys the most. A large multiple of a small number is still a small number - this
 does not make the 890M a good card for a dense 27B, it makes MTP the difference between unusable
 and marginal on one.
 
-Daily mixed use: 4. Prose-heavy: 3. n-max 5 is past the wall on every shape.
+Daily mixed use: 4 is the safe pick (top-2 in both runs). n-max 6 fell away in the run that tested it.
 
 ### A6000 48GB: n-max sweep
 
