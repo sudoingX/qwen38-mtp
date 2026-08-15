@@ -92,6 +92,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | 2x RX 9070 16GB (Vulkan) | 22.1 | 41.6 | 2 | 0.73 | [@tomertec](https://github.com/tomertec) |
 | AMD Radeon AI PRO R9700 32GB | 27.0 | 43.3 | 2 | 0.60-0.94 | [@ajnytebot](https://github.com/ajnytebot) |
 | Ryzen AI Max+ 395 / Radeon 8060S | 11.5 | 23.7 | 2 | 0.52-0.94 | [@shiwuxiu](https://github.com/shiwuxiu) |
+| RTX 3090 24GB (turboquant, n-max 6) | 39.8 | 61.5 | 6 | 0.61-0.90 | [@NicholaiVogel](https://github.com/NicholaiVogel) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -177,3 +178,7 @@ MTP n-max 2 doubles the overall median versus the 11.5 tok/s spec-off control (+
 ## License
 
 Apache-2.0. The numbers and verdicts are real, the conclusions are mine.
+
+## Independent RTX 3090 benchmark
+
+An independent RTX 3090 result using the unchanged `probe.py` is included in the community table above. The test used Unsloth Q4_K_M, 131K context, q4_0 KV cache, custom turboquant llama.cpp at commit `95b18c0`, NVIDIA driver 610.43.03, `--parallel 1`, all layers on GPU, and thinking disabled. Baseline and MTP runs used the same setup and medians of three runs across the three probe prompts. MTP used `n-max 6` and `p-min 0.75`; results were 39.8 tok/s baseline and 61.5 tok/s with the flag, with acceptance ranging from 0.61 to 0.90.
