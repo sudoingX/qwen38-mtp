@@ -92,6 +92,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | 2x RX 9070 16GB (Vulkan) | 22.1 | 41.6 | 2 | 0.73 | [@tomertec](https://github.com/tomertec) |
 | AMD Radeon AI PRO R9700 32GB | 27.0 | 43.3 | 2 | 0.60-0.94 | [@ajnytebot](https://github.com/ajnytebot) |
 | Ryzen AI Max+ 395 / Radeon 8060S | 11.5 | 23.7 | 2 | 0.52-0.94 | [@shiwuxiu](https://github.com/shiwuxiu) |
+| AMD Radeon 890M iGPU (Strix Point) 48GB UMA | 2.7 | 5.7 | 2 | 0.59-0.91 | [@davidglogan](https://github.com/davidglogan) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -99,8 +100,37 @@ Ran the A/B on your card? Open a PR and add a row.
 \* RTX 4090 row: unsloth UD-Q4_K_XL, 160K context, q4_0 KV cache, llama.cpp b10360, Windows/CUDA, 275W power limit — 20.6 GB VRAM baseline, 21.9 GB with spec.
 \* RX 9070 row: two 16GB cards on one 31.84 GiB pool, Vulkan build b10426, unsloth UD-Q4_K_XL, **262K context**, q8_0 KV cache — 28.0 GiB across the pool with spec. Method differs from the rows above and is spelled out under the sweep below.
 \* R9700 row: unsloth UD-Q4_K_XL, 262K context, q4_0 KV cache, llama.cpp b10433, Vulkan/RADV — 22.53 GB VRAM baseline, 24.55 GB with n-max 2. Method: unchanged `probe.py` at commit `67c20536`, three runs x three prompts, thinking off.
+\* Radeon 890M row: Ryzen AI 9 HX 370 (Strix Point, gfx1150), 48 GB UMA carve of 96 GB DDR5, unsloth UD-Q4_K_XL, **131K context**, q4_0 KV cache, llama.cpp Vulkan/RADV, Ubuntu 26.04 — 19.15 GB VRAM baseline, 20.13 GB with n-max 2. Method: unchanged `probe.py`, three runs x three prompts, thinking off. Note this is a *different* APU class from the Ryzen AI Max+ 395 row above: Strix Point 890M is 16 CUs on a 128-bit bus, Strix Halo 8060S is 40 CUs on 256-bit, and this row holds 131K context resident against that row's 32K — both differences push this baseline down.
 \* Ryzen AI Max+ 395 row: 64GB unified memory, unsloth UD-Q4_K_XL, 32K context, q8_0 KV cache, llama.cpp b10437, Windows build 26200, Vulkan with AMD driver 32.0.31035.1003. Method: unchanged `probe.py` at commit `67c2053`, three runs x three prompts, thinking off.
 \* RTX 4090 Spadav_ row: unsloth Q4_K_M, 200K context, q4_0 KV cache, q8_0 draft KV, mmproj loaded (888MB on GPU) — method: stock probe.py + 4096-token curl (MTP crossover: overhead dominates at ≤400 tokens, +60% at 4096 tokens).
+
+### Radeon 890M iGPU (Strix Point): n-max sweep — the biggest MTP win in this table
+
+Same 890M, same config as the row above, `--spec-draft-n-max` swept 2-5 plus a no-flag baseline.
+Overall and per-prompt probe medians (tok/s), draft acceptance from the server log:
+
+| n-max | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Acceptance |
+|---|---|---|---|---|---|
+| baseline (no flag) | 2.7 | 3.6 | 2.7 | 2.6 | - |
+| 2 | 5.7 | 6.0 | 4.6 | 5.7 | 0.59-0.91 |
+| 3 | 7.0 | 8.3 | 6.1 | 7.1 | 0.47-0.73 |
+| **4** | **7.4** | 11.8 | 6.4 | 7.4 | 0.35-0.69 |
+| 5 | 6.7 | 9.5 | 4.3 | 6.7 | 0.27-0.61 |
+
+**Peak at n-max 4 — the same place the A6000 peaks, on hardware two orders of magnitude cheaper.**
+At the peak this is **+174%** over baseline (2.7 -> 7.4), the largest gain posted here; even the
+table's n-max 2 column is +111%. The shape is otherwise familiar: code climbs hardest (3.6 -> 11.8,
+3.3x), prose peaks earlier and falls away, acceptance decays monotonically from 0.59-0.91 down to
+0.27-0.61.
+
+The reason an iGPU tops the gain column is the same reason its absolute numbers are last:
+**MTP pays in proportion to how bandwidth-starved decode already is.** A dense 27B on a 128-bit
+LPDDR5 bus is the most starved configuration in this table, so amortising the weight read across
+accepted drafts buys the most. A large multiple of a small number is still a small number - this
+does not make the 890M a good card for a dense 27B, it makes MTP the difference between unusable
+and marginal on one.
+
+Daily mixed use: 4. Prose-heavy: 3. n-max 5 is past the wall on every shape.
 
 ### A6000 48GB: n-max sweep
 
