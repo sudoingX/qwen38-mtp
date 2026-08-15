@@ -204,6 +204,8 @@ The same headroom **inverts rule 2**. `--spec-draft-p-min` swept at n-max 4, sam
 
 Gating raises acceptance exactly as rule 2 says (0.60 → 0.89) and costs throughput the whole way past 0.3 — the 0.60-0.70 band that rescues n-max 4 on the RX 9070 pair loses 26% here, and prose loses the most. The two rules are one rule: p-min converts skipped drafts into plain decode rounds, which is a win only when your plain decode is bandwidth-starved and your verify batches hurt. On a card where verification is nearly free, every draft is worth attempting and acceptance is a vanity metric. Bandwidth-poor rigs: gate. Desktop Blackwell: leave p-min at 0 and draft deep.
 
+One datapoint for the caveats section's "the floor should rise with upstream work": before settling on the build above, the same card ran the same configs on a launch-week binary (b10435-era). Moving to current master was worth **+10-15% decode across every quant tested**, MTP on or off, before touching any flag — the qwen3_5 hybrid-attention path is still being optimized upstream. If your row was measured on a day-one build, rebuilding may be the cheapest speedup in this README.
+
 ## License
 
 Apache-2.0. The numbers and verdicts are real, the conclusions are mine.
