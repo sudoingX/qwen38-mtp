@@ -92,6 +92,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | 2x RX 9070 16GB (Vulkan) | 22.1 | 41.6 | 2 | 0.73 | [@tomertec](https://github.com/tomertec) |
 | AMD Radeon AI PRO R9700 32GB | 27.0 | 43.3 | 2 | 0.60-0.94 | [@ajnytebot](https://github.com/ajnytebot) |
 | Ryzen AI Max+ 395 / Radeon 8060S | 11.5 | 23.7 | 2 | 0.52-0.94 | [@shiwuxiu](https://github.com/shiwuxiu) |
+| RTX 5090 32GB (desktop) | 69.3 | 123.9 | 4 | 0.71-0.74 | [@paulomcg](https://github.com/paulomcg) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -100,6 +101,7 @@ Ran the A/B on your card? Open a PR and add a row.
 \* RX 9070 row: two 16GB cards on one 31.84 GiB pool, Vulkan build b10426, unsloth UD-Q4_K_XL, **262K context**, q8_0 KV cache — 28.0 GiB across the pool with spec. Method differs from the rows above and is spelled out under the sweep below.
 \* R9700 row: unsloth UD-Q4_K_XL, 262K context, q4_0 KV cache, llama.cpp b10433, Vulkan/RADV — 22.53 GB VRAM baseline, 24.55 GB with n-max 2. Method: unchanged `probe.py` at commit `67c20536`, three runs x three prompts, thinking off.
 \* Ryzen AI Max+ 395 row: 64GB unified memory, unsloth UD-Q4_K_XL, 32K context, q8_0 KV cache, llama.cpp b10437, Windows build 26200, Vulkan with AMD driver 32.0.31035.1003. Method: unchanged `probe.py` at commit `67c2053`, three runs x three prompts, thinking off.
+\* RTX 5090 32GB row: unsloth UD-Q4_K_XL, **192K context**, q8_0 KV cache, mmproj loaded (vision, `--image-min-tokens 1024`), llama-swap `unified-cuda-2026-08-14`, Linux/CUDA — 26.5 GB VRAM baseline, 28.5 GB with spec. Uses **`--spec-draft-p-min 0.60`**, the second rig in this table to run the gate. Both arms at `--parallel 1` so only the spec flags differ. Method: stock `probe.py`, medians of three runs x three prompts, thinking off. n-max sweep at p-min 0.60 below.
 \* RTX 4090 Spadav_ row: unsloth Q4_K_M, 200K context, q4_0 KV cache, q8_0 draft KV, mmproj loaded (888MB on GPU) — method: stock probe.py + 4096-token curl (MTP crossover: overhead dominates at ≤400 tokens, +60% at 4096 tokens).
 
 ### A6000 48GB: n-max sweep
@@ -151,6 +153,31 @@ Two things this rig says that the NVIDIA rows do not:
 - **N=1 crowned the wrong arm.** A single-run screen put p-min 0.75 on top; medians of 3 flipped the winner to 0.60. The noise band here is around +/-2 tok/s, which is wide enough to invert a ranking. Do reps before you deploy a config.
 
 Method note, since it is not the repo's: numbers come from a local greedy streaming harness (max 1200 tokens) rather than `probe.py`, all in one session against one server instance with only the spec flags varying. The n-max 2 and p-min 0.60 arms are medians of 3; the spec-off, p-min 0.75/0.80 and n-max 8 arms are single screening runs. Treat the sweep as a shape, and the two headline arms as measurements.
+
+### RTX 5090 32GB (desktop): n-max sweep at `--spec-draft-p-min 0.60`
+
+Same card and config as the row above, `--spec-draft-n-max` swept 4-6, all arms
+gated at p-min 0.60. Overall and per-prompt `probe.py` medians (tok/s), draft
+acceptance from the server log:
+
+| n-max | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Acceptance |
+|---|---|---|---|---|---|
+| **4** | **123.9** | 150.7 | 98.0 | 123.9 | 0.73-0.74 |
+| 5 | 126.9 | 159.6 | 92.0 | 126.9 | 0.72-0.74 |
+| 6 | 120.5 | 146.6 | 96.5 | 120.5 | 0.61-0.67 |
+
+Same shape as the A6000 and 3x3090 sweeps: code climbs, prose falls, acceptance
+decays. 4 and 5 are inside the noise band on overall median (means are 125.4 vs
+125.3); 4 ships here because prose is meaningfully better (98.0 vs 92.0) and
+this box serves agents that write far more prose than code.
+
+**A `--parallel` warning worth its own line.** The README says `--parallel 1` is
+required, and it is — but the cost of getting it wrong is not just an unsupported
+config, it is a corrupted baseline. This box ran `--parallel 2` before the sweep
+and measured 55.4 tok/s unassisted. At `--parallel 1`, same everything else, the
+unassisted number is 69.3. **`--parallel 2` alone costs ~20% of single-stream
+decode.** Pairing an MTP arm against a `--parallel 2` baseline reads as +124%
+when the honest figure is +79%. Measure both arms at `--parallel 1`.
 
 ### AMD Radeon AI PRO R9700 32GB: n-max 2 versus 4
 
