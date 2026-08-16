@@ -1,8 +1,8 @@
 # Qwen3.8-27B MTP: the flag was free the whole time
 
-One llama.cpp flag unlocks +33% to +107% decode speed for Qwen3.8-27B on consumer GPUs, depending on the card. No new files, no conversion, no custom build. The MTP head already ships inside the GGUF you downloaded on launch night.
+One llama.cpp flag unlocks +33% to +120% decode speed for Qwen3.8-27B on consumer GPUs, depending on the card, and the knobs the community mapped push further still. No new files, no conversion, no custom build. The MTP head already ships inside the GGUF you downloaded on launch night.
 
-Opened hours after the Aug 14 2026 release. Within the first day the community grew it into a living record: **ten machines, eight contributors, every GPU vendor, and three tuning rules nobody knew at launch**, see [Community numbers](#community-numbers).
+Opened hours after the Aug 14 2026 release. Within two days the community grew it into a living record: **27 configurations, 21 contributors, every GPU vendor from a 128-bit iGPU to a 96GB Blackwell workstation card, and six tuning rules nobody knew at launch**, see [Community numbers](#community-numbers).
 
 ## The numbers
 
@@ -46,13 +46,16 @@ Swept on the 5090 mobile, same method:
 
 Acceptance decays as you draft deeper and prose pays for it first. Run 2 as your daily, 3 if your session is pure code.
 
-## The three rules the community found
+## The six rules the community found
 
-Discovered by contributors in the table within the first day, detailed in the sections and footnotes below:
+Discovered by contributors in the table across the first two days, detailed in the sections and footnotes below:
 
-1. **The n-max sweet spot is card-dependent.** 24GB cards peak at n-max 2, the 48GB A6000 peaked at 4 ([@lingster](https://github.com/lingster)). Bigger cards absorb deeper verification before acceptance decay eats the win.
-2. **`--spec-draft-p-min` is the second knob.** A confidence gate (~0.60) stops the head drafting when it's unsure, which makes deeper n-max nearly free instead of harmful ([@tomertec](https://github.com/tomertec)).
-3. **The gain scales with generation length.** Under ~400 output tokens the spec overhead can dominate; at 4096 tokens the same setup ran +60% ([@Spadav](https://github.com/Spadav)). Long work benefits most.
+1. **The n-max sweet spot is card- and topology-dependent.** 24GB cards peak at n-max 2, bigger or faster cards at 3-4, and switching split mode moves it too, so re-sweep after any config change ([@lingster](https://github.com/lingster), [@Jackwwg83](https://github.com/Jackwwg83)).
+2. **`--spec-draft-p-min` helps starved cards and hurts fast ones.** The ~0.60 confidence gate makes deep drafting nearly free on bandwidth-poor rigs ([@tomertec](https://github.com/tomertec)), and inverts on desktop Blackwell, where three independent RTX 5090s ran fastest ungated. Acceptance is a vanity metric there: gating raised it and lowered throughput ([@taco-devs](https://github.com/taco-devs), [@paulomcg](https://github.com/paulomcg), [@jcr211](https://github.com/jcr211)). Sweep it, don't adopt it.
+3. **The gain scales with generation length where overhead dominates.** Short generations can pay more than they win ([@Spadav](https://github.com/Spadav)); on rigs whose baseline is already bandwidth-bound the full gain shows at 400 tokens and length adds nothing ([@Jackwwg83](https://github.com/Jackwwg83)).
+4. **On multi-GPU boxes, fix the split mode before touching spec flags.** The default `--split-mode layer` serializes decode; `tensor` was +68% on its own on a 5060 Ti pair, and the two levers stack to 3.14x ([@Jackwwg83](https://github.com/Jackwwg83)).
+5. **Speculative decode is a single-stream optimization.** The advantage is gone by `--parallel 4`, and a `--parallel 2` BASELINE reads ~20% low, which inflates your gain claim, so measure both arms at `--parallel 1` ([@Jackwwg83](https://github.com/Jackwwg83), [@paulomcg](https://github.com/paulomcg)).
+6. **Rebuild llama.cpp before you tune anything.** Upstream is optimizing this arch weekly: a current build was +10-15% on every quant before any flag ([@taco-devs](https://github.com/taco-devs)), and a fresh 3090 baseline now equals the day-one with-flag number ([@hauntedhost](https://github.com/hauntedhost)).
 
 ## How it works
 
@@ -60,7 +63,7 @@ Qwen trained multi-token-prediction (nextn) layers into Qwen3.8. The quantizers 
 
 ## Caveats
 
-- `--parallel 1` is required for now, single slot only
+- `--parallel 1` for measurement, always: some hosts do serve with higher parallel, but the spec advantage is gone by 4 concurrent streams, and a parallel-2 baseline corrupts the A/B (see rule 5)
 - prompt processing takes a small hit from device-to-host embedding transfers
 - these are day-one llama.cpp speeds through the qwen3_5 code path, the hybrid attention kernels are young and the floor should rise with upstream work
 - your absolute numbers will differ with hardware, drivers, and thermals, the deltas are the durable part
@@ -94,6 +97,23 @@ Ran the A/B on your card? Open a PR and add a row.
 | Ryzen AI Max+ 395 / Radeon 8060S | 11.5 | 23.7 | 2 | 0.52-0.94 | [@shiwuxiu](https://github.com/shiwuxiu) |
 | RTX 5090 32GB (Q4_K_M, 131K) | 76.9 | 155.5 | 2 | 0.50-0.95 | [@anstaendig](https://github.com/anstaendig) |
 | RTX 5090 32GB (UD_Q4_K_XL, 262K) | 74.3 | 179.7 | 4 | 0.35–0.91 | [@anstaendig](https://github.com/anstaendig) |
+| AMD Radeon 890M iGPU (Strix Point) 48GB UMA | 2.7 | 5.7 | 2 | 0.59-0.91 | [@davidglogan](https://github.com/davidglogan) |
+| RTX PRO 6000 Blackwell 96GB | 63.8 | 91.5 | 2 | 0.72-0.81 | [@commdata2338](https://github.com/commdata2338) |
+| RTX 5090 32GB (desktop) | 61.4 | 135.0 | 4 | 0.38-0.87 | [@taco-devs](https://github.com/taco-devs) |
+| RTX 5090 32GB (Q6_K, 128K) | 61.9 | 130.0 | 2 | 0.52-0.95 | [@hypertectonic](https://x.com/hypertectonic) |
+| RTX 5090 32GB (Q6_K, 256K) | 62.0 | 121.7 | 2 | 0.50-0.95 | [@hypertectonic](https://x.com/hypertectonic) |
+| RTX 3090 Ti 24GB (Q4_K_M, 128K) | 42.0 | 60.9 | 2 | 0.47-0.93 | [@hypertectonic](https://x.com/hypertectonic) |
+| RTX 3090 Ti 24GB (Q4_K_M, 256K) | 41.2 | 61.4 | 2 | 0.55-0.94 | [@hypertectonic](https://x.com/hypertectonic) |
+| RTX 5090 32GB desktop (UD-Q5_K_XL) | 66.3 | 144.2 | 4 | 0.32-0.89 | [@TrickRiggin](https://github.com/TrickRiggin) |
+| 3× RTX 3060 12GB (layer split) | 17.3 | 24.5 | 8 | 0.87 | [@EamonMcKiernan05](https://github.com/EamonMcKiernan05) |
+| AMD Radeon 9060 XT 16 GB | 15.2 | 28.7 | 2 | 0.62-0.93 | [@kdrapel](https://github.com/kdrapel) |
+| RTX 3090 24GB (turboquant, n-max 6) | 39.8 | 61.5 | 6 | 0.61-0.90 | [@NicholaiVogel](https://github.com/NicholaiVogel) |
+| RTX 3090 24GB (b10450) | 41.3 | 63.5 | 2 | 0.69-0.87 | [@hauntedhost](https://github.com/hauntedhost) |
+| GMK EVO-X2, Ryzen AI Max+ 395 (64GB unified, ROCm/HIP) | 10.5-11.1 | 21.4-22.2 | 12 | 0.95-1.0 | [@KyaniteLabs](https://github.com/KyaniteLabs/qwen38-27b-strix-halo) |
+| 2× RTX 5060 Ti 16GB (PP, default `-sm layer`) | 22.1 | 42.8 | 2 | 0.53-0.94 | [@Jackwwg83](https://github.com/Jackwwg83) |
+| 2× RTX 5060 Ti 16GB (TP, `-sm tensor`) | 37.1 | 65.9 | 2 | 0.51-0.88 | [@Jackwwg83](https://github.com/Jackwwg83) |
+| RTX 5090 32GB (desktop) | 62.7 | **108.7** | 3 | 0.72 | [@jcr211](https://github.com/jcr211) |
+| RTX 5090 32GB (desktop) | 69.3 | 129.1 | 4 | 0.55 | [@paulomcg](https://github.com/paulomcg) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -105,6 +125,21 @@ Ran the A/B on your card? Open a PR and add a row.
 \* RTX 4090 Spadav_ row: unsloth Q4_K_M, 200K context, q4_0 KV cache, q8_0 draft KV, mmproj loaded (888MB on GPU) — method: stock probe.py + 4096-token curl (MTP crossover: overhead dominates at ≤400 tokens, +60% at 4096 tokens).
 \* RTX 5090 32GB (Q4_K_M, 131K): Unsloth Q4_K_M, 131K context, q4_0 KV cache - 19.54GB baseline, 20.38GB with spec.
 \* RTX 5090 32GB (UD_Q4_K_XL, 262K): Unsloth Q4_K_XL, 262K context, q4_0 KV cache - 23.27GB baseline, 24.75GB with spec.
+\* Radeon 890M row: Ryzen AI 9 HX 370 (Strix Point, gfx1150), 48 GB UMA carve of 96 GB DDR5, unsloth UD-Q4_K_XL, **131K context**, q4_0 KV cache, llama.cpp Vulkan/RADV, Ubuntu 26.04 — 19.15 GB VRAM baseline, 20.13 GB with n-max 2. Method: unchanged `probe.py`, three runs x three prompts, thinking off. Note this is a *different* APU class from the Ryzen AI Max+ 395 row above: Strix Point 890M is 16 CUs on a 128-bit bus, Strix Halo 8060S is 40 CUs on 256-bit, and this row holds 131K context resident against that row's 32K — both differences push this baseline down.
+\* RTX PRO 6000 row: unsloth Q4_K_M, 131K context, q4_0 KV cache, llama.cpp b10335, CUDA — method: stock `probe.py`, thinking off, `--parallel 1` both sides. n-max 4 on this card: 85.7 overall (code 105.7 up, prose 58.8 down, acceptance 0.65-0.77) — overall peaks at n-max 2 here, same code-up/prose-down shape as the A6000 and 3×3090 sweeps. Cross-engine bonus on the same card: vLLM 0.27.1 with unsloth's NVFP4 build and MTP (`--speculative-config '{"method":"mtp","num_speculative_tokens":N}'`) gives 63.3 -> 96.1 at n=2 and 116.3 (+84%) at n=4 — vLLM keeps climbing where llama.cpp has peaked. (An earlier revision carried a streamed-word-drop caveat for vLLM MTP; it was traced to the benchmark harness's own SSE parsing — a grep regex truncating multi-token deltas at escaped quotes — not to vLLM. Retracted with verification at [vllm-project/vllm#52469](https://github.com/vllm-project/vllm/issues/52469), closed; streamed output is byte-identical to non-streamed with MTP on.)
+\* RTX 5090 desktop row: unsloth UD-Q4_K_XL, 192K context, q8_0 KV cache, llama-server self-built from the PR #26704 branch (master-equivalent for this path, CUDA arch 120), Windows 11 native — ~26.3 GB VRAM baseline, ~28.2 GB at n-max 4. Method differs from `probe.py`: server `timings.predicted_per_second` over 900-token generations, 2 runs x the same 3 prompts, thinking off, warmup discarded. Acceptance range is per-request (prose low end, Python high end), 0.60 aggregate.
+\* RTX 5090 32GB rows: unsloth Q6_K, 128K/256K context, q4_0 KV cache, llama.cpp `62bf73d`, Windows/CUDA. Loaded VRAM was 24,441/27,385 MiB baseline and 25,797/29,381 MiB with spec. MTP gained 110.0% at 128K and 96.3% at 256K.
+\* RTX 3090 Ti rows: Q4_K_M, 128K/256K context, q4_0 KV cache, llama.cpp `62bf73d`, Linux/CUDA. Loaded VRAM was 18,842/21,786 MiB baseline and 20,134/23,718 MiB with spec. MTP gained 45.0% at 128K and 49.0% at 256K. The 256K MTP arm had 846 MiB free at load.
+\* RTX 5090 32GB and RTX 3090 Ti method: unchanged `probe.py` at commit `b299c0f`, three runs x three prompts, thinking off, warmup discarded. Baseline and MTP used the same model and serving config at each context. Only the MTP arm added `--spec-type draft-mtp --spec-draft-n-max 2`.
+\* RTX 5090 desktop UD-Q5_K_XL row: 131K context, q4_0 KV cache, llama.cpp b10448 (`ad1de39e0`), Windows/CUDA 13.3. Loaded VRAM was 22,449 MiB baseline and 24,083 MiB at n-max 4. Method: unchanged `probe.py` at commit `b299c0f`, three runs x three prompts, thinking off, warmup discarded. N-max 2 reached 129.4 tok/s with 80.9% aggregate acceptance; n-max 4 reached 144.2 tok/s with 63.8% aggregate acceptance, a 117.5% gain over baseline. Only the MTP flags changed within each pair.
+\* 3×3060 row: unsloth UD-Q4_K_XL, 262K context, q8_0 KV cache, layer split `--split-mode layer --tensor-split 35,37,28` (no NVLink), llama.cpp b10068, `--parallel 1`, `--spec-draft-n-max 8 --spec-draft-p-min 0.85`. Method differs from the rows above: **serve-timing averages from llama-server logs, not `probe.py`** — baseline = weighted mean of 126K decoded tokens with MTP off (17.3 t/s); with flag = weighted mean over 23.4M decoded tokens of live traffic (24.5 t/s, short bursts 28-39 t/s, long-context drops to 14-16 t/s). Acceptance = aggregate 0.87 (176,446/202,620 drafted tokens, per-task median 0.884, range 0.70-1.00) from `draft acceptance` log lines.
+\* Radeon 9060 XT 16 row: AtomicChat AD-IQ3_S_IQ3_XXS, 128k context, q4_0 KV cache — method: stock probe.py. Windows, ROCM
+\* RTX 3090 b10450 row: unsloth Q4_K_M, 131K context, q8_0 KV cache, q8_0 draft KV, llama.cpp b10450 (master `ece963f41`), CUDA/Linux (CachyOS), froggeric fixed chat template, `--reasoning-format deepseek` — method: unchanged `probe.py`, three runs x three prompts, thinking off. Worth noting: the b10450 *baseline* (41.3) equals the original day-one with-flag number for this card — the young hybrid-attention kernels caught up upstream, and the flag now stacks on top of that (+54%).
+\* GMK EVO-X2 row: Ryzen AI Max+ 395 (Strix Halo), 64GB unified memory, Linux, ROCm/HIP llama.cpp (gfx1151, ROCm 7.2.4), unsloth UD-Q4_K_XL, 96K context, f16 KV cache, `--parallel 1`, thinking off — 10.5-11.1 tok/s spec-off baseline; 21.4-22.2 tok/s with `--spec-draft-n-max 12` at 0.95-1.0 acceptance on the bench prompt (novel-traffic acceptance 0.345); stacking `--spec-type draft-mtp,ngram-mod --spec-ngram-mod-n-min 24` takes the streamed count bench to 59.7-64.0 cold and 148-163 warm on back-to-back repeats — the warm figure is an ngram repetition artifact on that prompt, not a general speedup (real novel traffic: prose 11-24, code 30-40 tok/s); production metric is time-per-task, 7.6-14.3 s per correct task across the thermal band. Method: streamed HTTP bench against a live llama-server (not `probe.py`), medians of 3+ runs; one-command reproducer: [bench.sh](https://github.com/KyaniteLabs/qwen38-27b-strix-halo/blob/main/bench.sh), full writeup: [one week with Qwen3.8-27B on Strix Halo](https://kyanitelabs.tech/blog/qwen-27b-strix-halo-one-week-local).
+\* 2× RTX 5060 Ti rows: unsloth UD-Q4_K_XL (sha256 `bee238bb…1372`), 131K context, q4_0 KV cache, llama.cpp built from source at commit `ece963f4` with `-DCMAKE_CUDA_ARCHITECTURES=120`, CUDA 13.0 / driver 580.173.02, PCIe 3.0 x8, `PHB` topology (no P2P). Method: unchanged `probe.py`, three runs x three prompts, thinking off. VRAM: PP 21.7 GB baseline / 23.0 GB with spec; TP 20.9 GB / 22.1 GB. The 16.68 GiB of weights do not fit one 16GB card, so two cards is the floor on this box — the split-mode choice is not optional here, which is what makes the two rows worth reading side by side. Both rows verified at `n_ctx_slot = 131072`. Details under the sweep below.
+\* RTX 5090 desktop row: unsloth Qwen3.8 Dynamic NVFP4 (FP8-as-Q8 unified-mtp), 163,840 context, q8_0 KV cache, llama.cpp b10430, Windows/CUDA, driver 610.88 — first NVFP4 quant in the table. Full n-max sweep: 2 → 98.4, **3 → 108.7 (+73%)**, 4 + p-min 0.60 → 103.9, 8 → 92.6 — deep-draft optimum consistent with the A6000 48GB pattern; n-max 8 confirmed worst spec setting. Method: unchanged `probe.py`, three runs x three prompts, thinking at template default (xhigh). Acceptance 0.721 aggregate (1845/2558 from server logs).
+\* RTX 5090 32GB row: unsloth UD-Q4_K_XL, **192K context**, q8_0 KV cache, mmproj loaded (vision, `--image-min-tokens 1024`), llama-swap `unified-cuda-2026-08-14`, Linux/CUDA — 26.5 GB VRAM baseline, 28.5 GB with spec. **Ungated** — see the p-min A/B below. Both arms at `--parallel 1` so only the spec flags differ. Method: stock `probe.py`, medians of three runs x three prompts, thinking off. n-max sweep at p-min 0.60 below.
+\* RTX 3090 turboquant row: unsloth Q4_K_M, 131K context, q4_0 KV cache, custom turboquant llama.cpp at commit `95b18c0`, NVIDIA driver 610.43.03, `--parallel 1`, all layers on GPU, thinking off. Method: unchanged `probe.py`, medians of three runs x three prompts, same setup both arms. MTP at n-max 6 with p-min 0.75.
 
 ### A6000 48GB: n-max sweep
 
@@ -178,6 +213,7 @@ Same 64GB Strix Halo system, same unsloth UD-Q4_K_XL model and serving config as
 
 MTP n-max 2 doubles the overall median versus the 11.5 tok/s spec-off control (+106%). N-max 4 is effectively flat overall (-0.8% versus n-max 2), but the workload split is sharp: Python rises 18.7% while prose falls 13.6%. This system keeps n-max 2 for mixed use and treats n-max 4 as a code-specialized option.
 
+
 ### RTX 5090 32GB: n-max sweep
 
 I've ran it in both configs, but n-max comparison table only for the second config that I actually run.
@@ -192,6 +228,200 @@ Config 2: Unsloth UD_Q4_K_XL, Context 262K, Q4_0 KV Cache, MMPROJ loaded, VRAM: 
 | 6 | 164.3 | 211.3 | 95.4 | 164.3 | 0.24–0.86 |
 
 **n-max 4** is the sweet spot (Interestingly, with 131K it wasn't any different, but with 262K it was). 
+
+### Radeon 890M iGPU (Strix Point): n-max sweep — biggest gain here, and an unstable peak
+
+Same 890M, same config as the row above, `--spec-draft-n-max` swept with a no-flag baseline.
+**Two independent runs, both with unchanged `probe.py`, identical flags, nothing else on the GPU.**
+Overall probe medians (tok/s):
+
+| n-max | Run A (11:10) | Run B (14:04/15:14) | Acceptance (Run B) |
+|---|---|---|---|
+| baseline (no flag) | 2.6 | 2.7 | - |
+| 2 | 5.9 | 5.7 | 0.59-0.91 |
+| 3 | 7.5 | 7.0 | 0.47-0.73 |
+| 4 | 7.9 | **7.4** | 0.35-0.69 |
+| 5 | **8.5** | 6.7 | 0.27-0.61 |
+| 6 | 7.2 | not run | - |
+
+🛑 **The two runs disagree on where the peak is — Run A says n-max 5, Run B says n-max 4 — so I am
+not claiming a peak for this card.** Baseline and n-max 2 reproduce to within 3% (2.6/2.7 and
+5.9/5.7), and the divergence widens with n, reaching **27% at n-max 5**. That is worth knowing on
+its own: on a bandwidth-shared iGPU whose clocks and memory contention move between runs, three
+runs x three prompts is not enough to resolve a peak, even though it is plenty for the n-max 2
+headline. Anyone sweeping on an APU should repeat the sweep before trusting an optimum.
+
+**The table row above uses n-max 2, where both runs agree.** At that setting this is **+111%**;
+at whichever of 4/5 is the true optimum it is **+174% to +227%** — the largest gain posted here
+either way, on the slowest hardware in the table.
+
+Why an iGPU tops the gain column while sitting last on absolute throughput:
+**MTP pays in proportion to how bandwidth-starved decode already is.** A dense 27B on a 128-bit
+LPDDR5 bus is the most starved configuration in this table, so amortising the weight read across
+accepted drafts buys the most. A large multiple of a small number is still a small number - this
+does not make the 890M a good card for a dense 27B, it makes MTP the difference between unusable
+and marginal on one.
+
+Daily mixed use: 4 is the safe pick (top-2 in both runs). n-max 6 fell away in the run that tested it.
+
+### RTX 5090 32GB desktop: n-max sweep, and where the p-min rule inverts
+
+Same config as the row above, `--spec-draft-n-max` swept off/1-6. Per-prompt means of 2 runs (tok/s), acceptance per-request from server timings:
+
+| n-max | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Acceptance |
+|---|---|---|---|---|---|
+| off | 61.4 | 61.6 | 61.3 | 61.5 | — |
+| 1 | 94.2 | 98.1 | 86.2 | 98.3 | 0.68-0.94 |
+| 2 | 118.9 | 130.1 | 99.0 | 127.7 | 0.56-0.92 |
+| 3 | 127.9 | 150.8 | 97.3 | 135.6 | 0.45-0.90 |
+| **4** | **135.0** | 162.6 | 95.3 | **147.0** | 0.38-0.87 |
+| 5 | 129.0 | 158.0 | 86.3 | 142.6 | 0.30-0.78 |
+| 6 | 127.5 | 160.1 | 78.5 | 143.9 | 0.27-0.76 |
+
+Same shape as every sweep above — code keeps climbing, prose peaks early, acceptance decays monotonically — but the desktop 5090 stretches rule 1 to its endpoint: the overall optimum is 4, the net gain is **+120%** over spec-off (the largest single-GPU delta in the table), and even n-max 6 still beats n-max 2. Verification on this card is cheap enough that deep drafts keep paying long after acceptance has collapsed.
+
+The same headroom **inverts rule 2**. `--spec-draft-p-min` swept at n-max 4, same method:
+
+| p-min | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Aggregate acceptance |
+|---|---|---|---|---|---|
+| **0.0** | **129.8** | 157.6 | **92.9** | 138.8 | 0.60 |
+| 0.3 | 131.3 | 164.0 | 85.5 | 144.5 | 0.62 |
+| 0.5 | 111.8 | 140.1 | 69.4 | 125.9 | 0.69 |
+| 0.7 | 95.9 | 118.9 | 58.9 | 109.9 | 0.80 |
+| 0.85 | 96.1 | 125.1 | 59.8 | 103.4 | 0.89 |
+
+Gating raises acceptance exactly as rule 2 says (0.60 → 0.89) and costs throughput the whole way past 0.3 — the 0.60-0.70 band that rescues n-max 4 on the RX 9070 pair loses 26% here, and prose loses the most. The two rules are one rule: p-min converts skipped drafts into plain decode rounds, which is a win only when your plain decode is bandwidth-starved and your verify batches hurt. On a card where verification is nearly free, every draft is worth attempting and acceptance is a vanity metric. Bandwidth-poor rigs: gate. Desktop Blackwell: leave p-min at 0 and draft deep.
+
+One datapoint for the caveats section's "the floor should rise with upstream work": before settling on the build above, the same card ran the same configs on a launch-week binary (b10435-era). Moving to current master was worth **+10-15% decode across every quant tested**, MTP on or off, before touching any flag — the qwen3_5 hybrid-attention path is still being optimized upstream. If your row was measured on a day-one build, rebuilding may be the cheapest speedup in this README.
+
+### AMD Radeon 9060 XT 16 GB
+Single card. LLama compiled with ROCM 7.1 support (Vulkan slower with dense models). Model is AtomicChat IQ3_XXS (https://huggingface.co/AtomicChat/Qwen3.8-27B-GGUF). Upstream `probe.py` unchanged.
+
+| n-max | Overall | Acceptance |
+|---|---|---|
+| 2 | 28.7 | 0.62-0.93 |
+| 3 | 30.7 |  0.41-0.91 |
+| 4 | 30.9 |  0.29-0.93 |
+
+nb. made another sweeping test on MTP n-max with another benchmark and more complex task and n-max = 2 was the clear winner, performance was impacted with larger n-max, 2 is the sweet general spot
+
+### 2× RTX 5060 Ti 16GB: on a multi-GPU box the split mode is worth more than the flag
+
+Same box, same GGUF, same serve config throughout — only `--split-mode` and the spec flags change. Stock `probe.py`, medians of three runs x three prompts, thinking off. Acceptance from the server log.
+
+| split mode | spec | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Acceptance |
+|---|---|---|---|---|---|---|
+| `layer` (default) | off | 22.1 | 22.0 | 22.1 | 22.0 | — |
+| `layer` | n-max 2 | 42.8 | 47.3 | 34.4 | 42.8 | 0.53-0.94 |
+| `layer` | n-max 3 | **47.5** | 54.0 | 35.4 | 47.5 | 0.48-0.75 |
+| `layer` | n-max 4 | 45.2 | 60.1 | 32.1 | 45.2 | 0.39-0.72 |
+| `tensor` | off | **37.1** | 37.1 | 37.3 | 37.0 | — |
+| `tensor` | n-max 2 | 65.9 | 70.6 | 51.4 | 65.9 | 0.51-0.88 |
+| `tensor` | n-max 3 | 69.3 | 78.7 | 53.6 | 69.3 | 0.38-0.74 |
+| `tensor` | n-max 4 | **71.3** | 83.4 | 47.6 | 71.3 | 0.35-0.70 |
+| `tensor` | n-max 5 | 67.1 | | | | |
+| `tensor` | n-max 6 | 56.2 | | | | |
+| `tensor` | n-max 8 | 59.7 | | | | |
+| `tensor` | n-max 4, `p-min 0.60` | 46.2 | 71.6 | 23.3 | 46.2 | 0.41-0.82 |
+| `tensor` | n-max 6, `p-min 0.60` | 45.4 | 65.8 | 24.3 | 45.4 | 0.56-0.85 |
+| `row` | off | fails to load | | | | |
+
+**The default split mode costs more than the flag gains.** `--split-mode layer` splits layers across cards, so at batch 1 there is nothing to pipeline: GPU0 computes while GPU1 idles and the pair decodes at single-card bandwidth. `--split-mode tensor` splits each matmul instead, both cards read weights at once, and the baseline goes 22.1 -> 37.1 (**+68%**) before any spec flag is involved. That is a larger free win than MTP gives on a 24GB single card.
+
+The two levers stack cleanly: **22.1 -> 69.3, a 3.14x end-to-end gain from two flags, neither of which costs anything.** Worth spelling out because `layer` is the default, so a two-card owner who follows the launch command verbatim measures 42.8 and stops there.
+
+The all-reduce is not free but it is cheaper than expected here: these are GeForce cards with P2P disabled, on PCIe 3.0 x8 with a `PHB` topology, so every reduction crosses host memory. Ideal scaling would put TP at 44.2 (2x the 22.1 single-card-equivalent); the measured 37.1 says the reduction costs about 16%. A host with working P2P should keep more of it.
+
+Two things worth knowing before you try this:
+
+- `--split-mode row` refuses to load — `device CUDA0 does not support split buffers`. `tensor` is the mode that works.
+- `--split-mode tensor` skips the auto-fit pass. `llama_params_fit is not implemented for SPLIT_MODE_TENSOR, abort` is a warning, not an error, and the server starts anyway with whatever `-c` you passed. Check `n_ctx_slot` in the log before comparing against a `layer` run, or you may be comparing two different context sizes. Both arms above were verified at `n_ctx_slot = 131072`.
+
+**The n-max sweet spot moves with the split mode, not just the VRAM pool.** Same box, same 32GB, same everything else: `layer` peaks at n-max 3 (47.5, falling to 45.2 at 4) while `tensor` peaks at n-max 4 (71.3), holds 67.1 at 5 and only collapses at 6. Rule 1 says the sweet spot is card-dependent — this says it is also *topology*-dependent, because tensor-split makes each verification step cheaper, so the pool can absorb a deeper draft before acceptance decay eats the win. If you switch split mode, re-sweep n-max; the old optimum does not carry over.
+
+Everything else matches the other sweeps: code prompts keep climbing (83.4 at n-max 4 under `tensor`), prose falls from the start (53.6 at n-max 3 down to 47.6 at 4), acceptance decays monotonically.
+
+**`--spec-draft-p-min` is a large net loss here**, which is the opposite of what it does on the RX 9070 pair. Gating n-max 4 at 0.60 drops the overall median from 71.3 to 46.2 — and it does so *while raising* acceptance from 0.35-0.70 to 0.41-0.82. The gate is refusing drafts that would have been accepted; the prose prompt takes the worst of it (53.6 → 23.3). Both rigs are 2x16GB, so the knob clearly does not generalize across backends — worth sweeping rather than adopting.
+
+**The gain does not scale with output length on this box.** Running the same two arms at 4096 tokens instead of 400 (probe.py with only `MAX_TOKENS` changed): baseline 37.1, MTP n-max 3 68.7 — a 1.85x ratio against 1.87x at 400 tokens. Rule 3 holds where spec overhead dominates short generations; here the tensor-split baseline is bandwidth-bound and stable, so the full gain is already present at 400 tokens and there is nothing left to recover at 4096.
+
+`llama-bench` on the same box as a cross-check, `-fa 1 -ctk q4_0 -ctv q4_0`:
+
+| split mode | pp512 | tg128 | pp4096+tg128 |
+|---|---|---|---|
+| `layer` | 926.96 ± 18.81 | 22.58 ± 0.02 | 482.17 ± 0.22 |
+| `tensor` | 1028.04 ± 2.69 | **38.37 ± 0.26** | 550.86 ± 0.77 |
+
+`llama-bench` puts the decode gain at +70%, `probe.py` at +68% — two different tools, two different prompt sets, same answer. Prefill moves only +11%, which is the expected shape: prompt processing is compute-bound and already batched, so layer-split leaves both cards reasonably busy; decode at batch 1 is where the serialization actually bites.
+
+#### Decode against prompt depth
+
+`probe.py` runs at near-zero context, which is the easiest case for any spec-decode setup. Both arms re-measured under `-sm tensor` with a filler prompt sized against the server's own `/tokenize` endpoint, so the depths are token-exact rather than a chars-per-token guess. TTFT excluded from the decode rate, as in `probe.py`.
+
+| prompt tokens | spec off: TTFT | prefill t/s | decode t/s | MTP n-3: TTFT | prefill t/s | decode t/s | ratio |
+|---|---|---|---|---|---|---|---|
+| 4,075 | 2.59 s | 1,572 | 36.24 | 2.80 s | 1,454 | 56.05 | 1.55x |
+| 16,255 | 7.57 s | 2,148 | 34.53 | 8.25 s | 1,970 | 53.27 | 1.54x |
+| 32,467 | 10.51 s | **3,089** | 32.38 | 11.53 s | 2,817 | 50.79 | 1.57x |
+| 64,891 | 22.35 s | 2,904 | 28.73 | 24.50 s | 2,649 | 56.43 | 1.96x |
+| 129,781 | 52.33 s | 2,480 | 23.70 | 58.11 s | 2,233 | 46.34 | 1.96x |
+
+**The flag matters more the deeper you go, not less.** The unassisted arm loses 35% of its decode rate between 4K and 128K (36.24 → 23.70); the MTP arm loses 17% (56.05 → 46.34). At 128K of resident context this pair still generates at 46 tok/s.
+
+Two caveats on this table. The 64K and 128K rows generated only ~42 tokens before the model stopped, so those decode figures rest on a much smaller sample than the shallower rows — treat the 1.96x as indicative, not settled. And prefill peaking mid-sweep (3,089 t/s at 32K, lower at both 4K and 128K) is the usual batching-vs-attention-cost curve, not a measurement error.
+
+#### Concurrency, and whether MTP survives `--parallel 4`
+
+Upstream says `--parallel 1` is required for spec-decode; the 3x3090 row reports it was not required on that host. On this one **the server starts and serves correctly with `--parallel 4` and MTP together**. Whether it *helps* is a different question. 16K prompts, `-sm tensor`, per-stream is the median stream, aggregate is total generated tokens over wall clock including prefill:
+
+| N | spec off: per-stream | aggregate | MTP n-3: per-stream | aggregate |
+|---|---|---|---|---|
+| 1 | 34.19 | 6.91 | **57.99** | 10.72 |
+| 2 | 19.32 | 18.53 | 20.94 | 16.34 |
+| 4 | 19.13 | **29.48** | 19.21 | **29.24** |
+
+**Speculative decoding is a single-stream optimisation.** At N=1 it is worth 1.70x. By N=2 the advantage is inside the noise, and at N=4 the two arms are indistinguishable (29.48 vs 29.24) — once the batch is full the GPU has real work queued and there is no idle verification capacity for the draft head to exploit. If you serve concurrent users, tune `--parallel` and skip the spec flags; if you are one person at a terminal, the flags are most of your speed.
+
+One side effect worth a line: across every arm the MTP runs drew *less* power than their spec-off controls while producing more tokens — combined peak 268 W vs 293 W on the depth sweep, 267 W vs 305 W under concurrency. The draft head is not buying speed with watts.
+
+### RTX 5090 32GB (desktop): the p-min gate is inverted here too
+
+Gate A/B at n-max 4. All three arms at 192K, q8_0 KV, `--parallel 1` — only the
+spec flags vary, so these are directly comparable to the row's baseline.
+`probe.py` medians of three runs x three prompts, thinking off:
+
+| config | Overall median | Overall mean | P1 code (py) | P2 prose (mmap) | Acceptance |
+|---|---|---|---|---|---|
+| spec off | 69.3 | 69.3 | 69.3 | 69.2 | — |
+| n-max 4, `--spec-draft-p-min 0.60` | 123.9 | 125.4 | 150.7 | 98.0 | 0.73 |
+| **n-max 4, ungated** | **129.1** | 131.6 | 157.4 | 109.1 | 0.55 |
+
+Ungated wins on every prompt: +4.2% overall median, +4.4% on code, +11.3% on
+prose. Smaller than the 26% loss @taco-devs measured in the 0.60-0.70 band, but
+the same direction — and @jcr211's NVFP4 rig lands the same way, with gated
+n-max 4 (103.9) below ungated n-max 3 (108.7).
+
+That is three independent RTX 5090s, on three different quants, where **rule 2
+inverts**. The gate helps the bandwidth-starved cards it was found on; where
+verification is close to free it converts skipped drafts into plain decode
+rounds. Worth treating as card-class-dependent rather than a default.
+
+**Acceptance is a vanity metric on this class of card.** Gating moved it from
+0.55 to 0.73 while throughput went *down*. Tuning for acceptance picks the
+slower configuration.
+
+Depth optimum here is 4. A separate ungated sweep at 224K with two slots put
+n-max 6 at 113.0 median against 126.7 for n-max 4, with prose collapsing from
+100.3 to 79.3.
+
+**A `--parallel` warning worth its own line.** The README says `--parallel 1` is
+required, and it is — but the cost of getting it wrong is not just an
+unsupported config, it is a corrupted baseline. This box measured 55.4 tok/s
+unassisted at `--parallel 2`; at `--parallel 1`, same everything else, it is
+69.3. **`--parallel 2` alone costs ~20% of single-stream decode.** Pairing an
+MTP arm against a `--parallel 2` baseline reads as +133% when the honest figure
+is +86%. Measure both arms at `--parallel 1`.
+
 
 ## License
 
