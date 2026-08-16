@@ -189,7 +189,13 @@ Same box, same GGUF, same serve config throughout — only `--split-mode` and th
 | `layer` | n-max 4 | 45.2 | 60.1 | 32.1 | 45.2 | 0.39-0.72 |
 | `tensor` | off | **37.1** | 37.1 | 37.3 | 37.0 | — |
 | `tensor` | n-max 2 | 65.9 | 70.6 | 51.4 | 65.9 | 0.51-0.88 |
-| `tensor` | n-max 3 | **69.3** | 78.7 | 53.6 | 69.3 | 0.38-0.74 |
+| `tensor` | n-max 3 | 69.3 | 78.7 | 53.6 | 69.3 | 0.38-0.74 |
+| `tensor` | n-max 4 | **71.3** | 83.4 | 47.6 | 71.3 | 0.35-0.70 |
+| `tensor` | n-max 5 | 67.1 | | | | |
+| `tensor` | n-max 6 | 56.2 | | | | |
+| `tensor` | n-max 8 | 59.7 | | | | |
+| `tensor` | n-max 4, `p-min 0.60` | 46.2 | 71.6 | 23.3 | 46.2 | 0.41-0.82 |
+| `tensor` | n-max 6, `p-min 0.60` | 45.4 | 65.8 | 24.3 | 45.4 | 0.56-0.85 |
 | `row` | off | fails to load | | | | |
 
 **The default split mode costs more than the flag gains.** `--split-mode layer` splits layers across cards, so at batch 1 there is nothing to pipeline: GPU0 computes while GPU1 idles and the pair decodes at single-card bandwidth. `--split-mode tensor` splits each matmul instead, both cards read weights at once, and the baseline goes 22.1 -> 37.1 (**+68%**) before any spec flag is involved. That is a larger free win than MTP gives on a 24GB single card.
@@ -203,7 +209,13 @@ Two things worth knowing before you try this:
 - `--split-mode row` refuses to load — `device CUDA0 does not support split buffers`. `tensor` is the mode that works.
 - `--split-mode tensor` skips the auto-fit pass. `llama_params_fit is not implemented for SPLIT_MODE_TENSOR, abort` is a warning, not an error, and the server starts anyway with whatever `-c` you passed. Check `n_ctx_slot` in the log before comparing against a `layer` run, or you may be comparing two different context sizes. Both arms above were verified at `n_ctx_slot = 131072`.
 
-**The n-max sweet spot lands on 3 for a 32GB pool**, under both split modes — between the 24GB cards that peak at 2 and the 48GB A6000 that peaks at 4, which is the shape rule 1 predicts. Everything else matches the other sweeps too: code prompts keep climbing (60.1 at n-max 4 under `layer`, 78.7 at n-max 3 under `tensor`), prose falls from the start, acceptance decays monotonically.
+**The n-max sweet spot moves with the split mode, not just the VRAM pool.** Same box, same 32GB, same everything else: `layer` peaks at n-max 3 (47.5, falling to 45.2 at 4) while `tensor` peaks at n-max 4 (71.3), holds 67.1 at 5 and only collapses at 6. Rule 1 says the sweet spot is card-dependent — this says it is also *topology*-dependent, because tensor-split makes each verification step cheaper, so the pool can absorb a deeper draft before acceptance decay eats the win. If you switch split mode, re-sweep n-max; the old optimum does not carry over.
+
+Everything else matches the other sweeps: code prompts keep climbing (83.4 at n-max 4 under `tensor`), prose falls from the start (53.6 at n-max 3 down to 47.6 at 4), acceptance decays monotonically.
+
+**`--spec-draft-p-min` is a large net loss here**, which is the opposite of what it does on the RX 9070 pair. Gating n-max 4 at 0.60 drops the overall median from 71.3 to 46.2 — and it does so *while raising* acceptance from 0.35-0.70 to 0.41-0.82. The gate is refusing drafts that would have been accepted; the prose prompt takes the worst of it (53.6 → 23.3). Both rigs are 2x16GB, so the knob clearly does not generalize across backends — worth sweeping rather than adopting.
+
+**The gain does not scale with output length on this box.** Running the same two arms at 4096 tokens instead of 400 (probe.py with only `MAX_TOKENS` changed): baseline 37.1, MTP n-max 3 68.7 — a 1.85x ratio against 1.87x at 400 tokens. Rule 3 holds where spec overhead dominates short generations; here the tensor-split baseline is bandwidth-bound and stable, so the full gain is already present at 400 tokens and there is nothing left to recover at 4096.
 
 `llama-bench` on the same box as a cross-check, `-fa 1 -ctk q4_0 -ctv q4_0`:
 
@@ -213,6 +225,47 @@ Two things worth knowing before you try this:
 | `tensor` | 1028.04 ± 2.69 | **38.37 ± 0.26** | 550.86 ± 0.77 |
 
 `llama-bench` puts the decode gain at +70%, `probe.py` at +68% — two different tools, two different prompt sets, same answer. Prefill moves only +11%, which is the expected shape: prompt processing is compute-bound and already batched, so layer-split leaves both cards reasonably busy; decode at batch 1 is where the serialization actually bites.
+
+#### Decode against prompt depth
+
+`probe.py` runs at near-zero context, which is the easiest case for any spec-decode setup. Both arms re-measured under `-sm tensor` with a filler prompt sized against the server's own `/tokenize` endpoint, so the depths are token-exact rather than a chars-per-token guess. TTFT excluded from the decode rate, as in `probe.py`.
+
+| prompt tokens | spec off: TTFT | prefill t/s | decode t/s | MTP n-3: TTFT | prefill t/s | decode t/s | ratio |
+|---|---|---|---|---|---|---|---|
+| 4,075 | 2.59 s | 1,572 | 36.24 | 2.80 s | 1,454 | 56.05 | 1.55x |
+| 16,255 | 7.57 s | 2,148 | 34.53 | 8.25 s | 1,970 | 53.27 | 1.54x |
+| 32,467 | 10.51 s | **3,089** | 32.38 | 11.53 s | 2,817 | 50.79 | 1.57x |
+| 64,891 | 22.35 s | 2,904 | 28.73 | 24.50 s | 2,649 | 56.43 | 1.96x |
+| 129,781 | 52.33 s | 2,480 | 23.70 | 58.11 s | 2,233 | 46.34 | 1.96x |
+
+**The flag matters more the deeper you go, not less.** The unassisted arm loses 35% of its decode rate between 4K and 128K (36.24 → 23.70); the MTP arm loses 17% (56.05 → 46.34). At 128K of resident context this pair still generates at 46 tok/s.
+
+Two caveats on this table. The 64K and 128K rows generated only ~42 tokens before the model stopped, so those decode figures rest on a much smaller sample than the shallower rows — treat the 1.96x as indicative, not settled. And prefill peaking mid-sweep (3,089 t/s at 32K, lower at both 4K and 128K) is the usual batching-vs-attention-cost curve, not a measurement error.
+
+#### Concurrency, and whether MTP survives `--parallel 4`
+
+Upstream says `--parallel 1` is required for spec-decode; the 3x3090 row reports it was not required on that host. On this one **the server starts and serves correctly with `--parallel 4` and MTP together**. Whether it *helps* is a different question. 16K prompts, `-sm tensor`, per-stream is the median stream, aggregate is total generated tokens over wall clock including prefill:
+
+| N | spec off: per-stream | aggregate | MTP n-3: per-stream | aggregate |
+|---|---|---|---|---|
+| 1 | 34.19 | 6.91 | **57.99** | 10.72 |
+| 2 | 19.32 | 18.53 | 20.94 | 16.34 |
+| 4 | 19.13 | **29.48** | 19.21 | **29.24** |
+
+**Speculative decoding is a single-stream optimisation.** At N=1 it is worth 1.70x. By N=2 the advantage is inside the noise, and at N=4 the two arms are indistinguishable (29.48 vs 29.24) — once the batch is full the GPU has real work queued and there is no idle verification capacity for the draft head to exploit. If you serve concurrent users, tune `--parallel` and skip the spec flags; if you are one person at a terminal, the flags are most of your speed.
+
+#### Power
+
+Sampled every 2s across the depth and concurrency arms, per GPU:
+
+| arm | GPU0 peak / mean | GPU1 peak / mean | combined peak / mean |
+|---|---|---|---|
+| depth, spec off | 139 W / 106 W | 154 W / 116 W | 293 W / 222 W |
+| depth, MTP n-3 | 127 W / 98 W | 142 W / 108 W | 268 W / 205 W |
+| concurrency, spec off | 147 W / 95 W | 158 W / 104 W | 305 W / 199 W |
+| concurrency, MTP n-3 | 129 W / 83 W | 138 W / 91 W | 267 W / 174 W |
+
+The cards are rated 180 W each and never approach it — this workload is memory-bound, not compute-bound, which is the same reason tensor-split helps so much. MTP arms draw *less* power than their controls while producing more tokens.
 
 ## License
 
