@@ -92,7 +92,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | 2x RX 9070 16GB (Vulkan) | 22.1 | 41.6 | 2 | 0.73 | [@tomertec](https://github.com/tomertec) |
 | AMD Radeon AI PRO R9700 32GB | 27.0 | 43.3 | 2 | 0.60-0.94 | [@ajnytebot](https://github.com/ajnytebot) |
 | Ryzen AI Max+ 395 / Radeon 8060S | 11.5 | 23.7 | 2 | 0.52-0.94 | [@shiwuxiu](https://github.com/shiwuxiu) |
-| RTX 5090 32GB (desktop) | 62.7 | **108.7** | 3 | 0.72 | [@jcr211](https://github.com/jcr211) |
+| RTX 5090 32GB (desktop) | 62.7 | **130.1** | 4 (ungated) | 0.64 | [@jcr211](https://github.com/jcr211) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -102,7 +102,7 @@ Ran the A/B on your card? Open a PR and add a row.
 \* R9700 row: unsloth UD-Q4_K_XL, 262K context, q4_0 KV cache, llama.cpp b10433, Vulkan/RADV — 22.53 GB VRAM baseline, 24.55 GB with n-max 2. Method: unchanged `probe.py` at commit `67c20536`, three runs x three prompts, thinking off.
 \* Ryzen AI Max+ 395 row: 64GB unified memory, unsloth UD-Q4_K_XL, 32K context, q8_0 KV cache, llama.cpp b10437, Windows build 26200, Vulkan with AMD driver 32.0.31035.1003. Method: unchanged `probe.py` at commit `67c2053`, three runs x three prompts, thinking off.
 \* RTX 4090 Spadav_ row: unsloth Q4_K_M, 200K context, q4_0 KV cache, q8_0 draft KV, mmproj loaded (888MB on GPU) — method: stock probe.py + 4096-token curl (MTP crossover: overhead dominates at ≤400 tokens, +60% at 4096 tokens).
-\* RTX 5090 desktop row: unsloth Qwen3.8 Dynamic NVFP4 (FP8-as-Q8 unified-mtp), 163,840 context, q8_0 KV cache, llama.cpp b10430, Windows/CUDA, driver 610.88 — first NVFP4 quant in the table. Full n-max sweep: 2 → 98.4, **3 → 108.7 (+73%)**, 4 + p-min 0.60 → 103.9, 8 → 92.6 — deep-draft optimum consistent with the A6000 48GB pattern; n-max 8 confirmed worst spec setting. Method: unchanged `probe.py`, three runs x three prompts, thinking at template default (xhigh). Acceptance 0.721 aggregate (1845/2558 from server logs).
+\* RTX 5090 desktop row: unsloth Qwen3.8 Dynamic NVFP4 (FP8-as-Q8 unified-mtp), 163,840 context, q8_0 KV cache, llama.cpp b10430, Windows/CUDA, driver 610.88 — first NVFP4 quant in the table. Full sweep: 2 → 98.4, 3 → 108.7, **4 ungated → 130.1 (+108%)**, 5 ungated → 130.4 (plateau), 4 + p-min 0.60 → 103.9, 8 → 92.6. Confirms #27's gate inversion on a fourth rig and second desktop 5090 (their 129.1 UD-Q4_K_XL/Linux vs this 130.1 NVFP4/Windows — <1% apart): ungated deep drafts win on this card class; the 0.60 gate costs ~25 tok/s. n-max 8 still worst. Method: unchanged `probe.py`, three runs x three prompts, thinking at template default (xhigh). Acceptance 0.721 aggregate (1845/2558 from server logs).
 
 ### A6000 48GB: n-max sweep
 
