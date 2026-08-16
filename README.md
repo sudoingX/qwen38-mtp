@@ -112,6 +112,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | 2× RTX 5060 Ti 16GB (TP, `-sm tensor`) | 37.1 | 65.9 | 2 | 0.51-0.88 | [@Jackwwg83](https://github.com/Jackwwg83) |
 | RTX 5090 32GB (desktop) | 62.7 | **108.7** | 3 | 0.72 | [@jcr211](https://github.com/jcr211) |
 | RTX 5090 32GB (desktop) | 69.3 | 129.1 | 4 | 0.55 | [@paulomcg](https://github.com/paulomcg) |
+| 2× Tesla P40 24GB (tensor split) | 11.7 | 22.6 | 4 | 0.68-0.87 | [@lyesrock](https://github.com/lyesrock) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -136,6 +137,7 @@ Ran the A/B on your card? Open a PR and add a row.
 \* RTX 5090 desktop row: unsloth Qwen3.8 Dynamic NVFP4 (FP8-as-Q8 unified-mtp), 163,840 context, q8_0 KV cache, llama.cpp b10430, Windows/CUDA, driver 610.88 — first NVFP4 quant in the table. Full n-max sweep: 2 → 98.4, **3 → 108.7 (+73%)**, 4 + p-min 0.60 → 103.9, 8 → 92.6 — deep-draft optimum consistent with the A6000 48GB pattern; n-max 8 confirmed worst spec setting. Method: unchanged `probe.py`, three runs x three prompts, thinking at template default (xhigh). Acceptance 0.721 aggregate (1845/2558 from server logs).
 \* RTX 5090 32GB row: unsloth UD-Q4_K_XL, **192K context**, q8_0 KV cache, mmproj loaded (vision, `--image-min-tokens 1024`), llama-swap `unified-cuda-2026-08-14`, Linux/CUDA — 26.5 GB VRAM baseline, 28.5 GB with spec. **Ungated** — see the p-min A/B below. Both arms at `--parallel 1` so only the spec flags differ. Method: stock `probe.py`, medians of three runs x three prompts, thinking off. n-max sweep at p-min 0.60 below.
 \* RTX 3090 turboquant row: unsloth Q4_K_M, 131K context, q4_0 KV cache, custom turboquant llama.cpp at commit `95b18c0`, NVIDIA driver 610.43.03, `--parallel 1`, all layers on GPU, thinking off. Method: unchanged `probe.py`, medians of three runs x three prompts, same setup both arms. MTP at n-max 6 with p-min 0.75.
+\* 2× Tesla P40 row: unsloth UD-Q5_K_XL, 131K context, q4_0 KV cache, llama.cpp b10453 (`3cb7ffb1a`), Ubuntu 25.04 / CUDA 12.9, driver 580.178.04, `--tensor-split 1,1` with `numactl --interleave=all`, P2P disabled (cards on separate NUMA nodes, SYS path), `--parallel 1`, thinking off. ~11 GB/GPU baseline, ~12 GB/GPU with spec. Method: `probe.py` unchanged, three runs x three prompts, both arms otherwise identical. MTP arm: `--spec-type draft-mtp --spec-draft-n-max 4 --spec-draft-p-min 0.75`; prefill 354 → 295 tok/s (20K tokens). Full n-max sweep and a multi-model companion sweep below.
 
 ### A6000 48GB: n-max sweep
 
@@ -401,6 +403,49 @@ unassisted at `--parallel 2`; at `--parallel 1`, same everything else, it is
 69.3. **`--parallel 2` alone costs ~20% of single-stream decode.** Pairing an
 MTP arm against a `--parallel 2` baseline reads as +133% when the honest figure
 is +86%. Measure both arms at `--parallel 1`.
+
+## 2× Tesla P40 24GB (tensor split): n-max sweep on Pascal
+
+Same box as the row above — two P40s (sm_61, 732 GB/s each, no P2P, separate NUMA nodes), unsloth UD-Q5_K_XL, 131K context, q4_0 KV, `--tensor-split 1,1` under `numactl --interleave=all`, `--parallel 1`, thinking off. `probe.py` unchanged, medians of three runs x three prompts, only the spec flags changing between arms. Draft acceptance from the server log:
+
+| config | Overall median | Overall mean | Prefill 20K | Acceptance |
+|---|---|---|---|---|
+| spec off | 11.7 | 11.8 | 354 | — |
+| n-max 2, p-min 0.75 | 21.1 | 20.0 | 300 | 0.73-0.94 |
+| **n-max 4, p-min 0.75** | **22.6** | **21.6** | 295 | 0.68-0.87 |
+| n-max 6, p-min 0.75 | 21.1 | 20.5 | 290 | 0.63-0.81 |
+| n-max 6, p-min 0.60 | 20.1 | 19.7 | 290 | 0.46-0.74 |
+
+**+92% at the peak (22.6 vs 11.7) — the largest multi-GPU delta in the table, on the oldest architecture here.** Pascal has no tensor cores and the dense 27B decode is bandwidth-starved exactly like the 890M and RX 9070 rows, so the rule-1/rule-2 shape holds: amortising the weight read across accepted drafts is the whole game.
+
+Two specifics that differ from the newer cards:
+
+- **n-max 4 beats n-max 6, not the other way around.** The 3×3090 and 5060 Ti tensor rows peak at 3-4 too, but here n-max 6 loses ground (acceptance 0.63-0.81 vs 0.68-0.87) and n-max 8 was not run because the trend was already falling. The verification batch on sm_61 is expensive enough that the deeper draft stops paying.
+- **p-min 0.75 helps, p-min 0.60 hurts** — the RX 9070 direction, not the 5090-desktop inversion. Gating at 0.60 collapsed acceptance to 0.46-0.74 and cost ~2 tok/s. On this class of card the gate rescues the deep draft; it is not a vanity knob.
+
+The prefill tax is the usual ~15-17% (354 → 295 tok/s), the standard cost of device-to-host embedding transfers noted in the caveats section.
+
+Production follow-up on the same box, **f16 KV instead of q4_0** (the cards have room; q4_0 only matters when the 131K-262K context must fit a tight pool): n-max 4 at p-min 0.75 still measures 22.3 mean / 24.0 median over the same probe — the q4_0 in the table row was a fit decision, not a speed one, and f16 KV reproduces it. Daily mixed use: 4.
+
+### Companion: the MTP gain and the n-max optimum are per-model
+
+Same box, same build (b10453), same method, each model at its production context. KV cache: q4_0 for the Qwen3.8-27B arm (the paired A/B above), f16 for the rest — the production follow-up verified f16 reproduces the 3.8 peak, so the table stays comparable. Baseline / with-flag decode medians (tok/s), `probe.py` unchanged:
+
+| Model (UD-Q5_K_XL) | Baseline | Best spec arm | Peak | Gain | Acceptance |
+|---|---|---|---|---|---|
+| Qwen3.8-27B dense | 11.8 | n-max 4, p-min 0.75 | 22.6 | +92% | 0.68-0.87 |
+| Qwen3.6-27B dense | 12.0 | n-max 6, p-min 0.75 | 22.2 (median 24.3) | +85% | 0.78-1.00 |
+| Qwen3.6-35B-A3B MoE | 49.6 | n-max 4, p-min 0.75 | 67.1 | +35% | 0.83-0.99 |
+| Qwen3.5-9B | 34.2 | n-max 4, p-min 0.75 | 46.8 | +37% | 0.68-0.95 |
+| Qwen3.5-4B | 53.8 | n-max 2, p-min 0.75 | 67.5 | +25% | 0.82-0.99 |
+
+Three things the sweep adds to rule 1:
+
+- **The optimum n-max moves between models of the same size and class.** Qwen3.8-27B (dense) peaks at n-max 4; Qwen3.6-27B (dense, same quant, same cards) peaks at n-max 6. Same hardware, same method, different winner — re-sweep when the model changes, not just when the GPU does.
+- **MoE collapses the gain.** The 35B-A3B is 4× faster than the dense 27B with the flag *off*, and the flag only adds +25-35% on top of that instead of +85-92%. The active-3B parameters are not bandwidth-bound at batch 1, so there is less to amortise — rule 3 in its purest form, and probably the single most useful row for anyone picking between the two.
+- **Smaller models want shorter drafts.** The 4B peaks at n-max 2 (67.5) and n-max 4 is already behind (66.3); the 9B at n-max 4. With the model's own weights fitting in a small fraction of the pool, the verify cost per drafted token dominates faster.
+
+p-min 0.75 won on every arm here; the MoE arms kept 0.83-0.99 acceptance at n-max 4, so gating is nearly free where acceptance was healthy to begin with.
 
 ## License
 
