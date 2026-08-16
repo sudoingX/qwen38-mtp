@@ -84,10 +84,10 @@ Ran the A/B on your card? Open a PR and add a row.
 |---|---|---|---|---|---|
 | RTX 3090 24GB | 31.0 | 41.3 | 2 | 0.78 | [@sudoingX](https://x.com/sudoingX) |
 | RTX 5090 mobile 24GB | 36.7 | 50.9 | 2 | 0.79 | [@sudoingX](https://x.com/sudoingX) |
-| RTX 5090 32GB (Q6_K, 128K) | 61.9 | 130.0 | 2 | 0.52-0.95 | [@hypertectonic](https://github.com/hypertectonic) |
-| RTX 5090 32GB (Q6_K, 256K) | 62.0 | 121.7 | 2 | 0.50-0.95 | [@hypertectonic](https://github.com/hypertectonic) |
-| RTX 3090 Ti 24GB (Q4_K_M, 128K) | 42.0 | 60.9 | 2 | 0.47-0.93 | [@hypertectonic](https://github.com/hypertectonic) |
-| RTX 3090 Ti 24GB (Q4_K_M, 256K) | 41.2 | 61.4 | 2 | 0.55-0.94 | [@hypertectonic](https://github.com/hypertectonic) |
+| RTX 5090 32GB (Q6_K, 128K) | 61.9 | 130.0 | 2 | 0.52-0.95 | [@hypertectonic](https://x.com/hypertectonic) |
+| RTX 5090 32GB (Q6_K, 256K) | 62.0 | 121.7 | 2 | 0.50-0.95 | [@hypertectonic](https://x.com/hypertectonic) |
+| RTX 3090 Ti 24GB (Q4_K_M, 128K) | 42.0 | 60.9 | 2 | 0.47-0.93 | [@hypertectonic](https://x.com/hypertectonic) |
+| RTX 3090 Ti 24GB (Q4_K_M, 256K) | 41.2 | 61.4 | 2 | 0.55-0.94 | [@hypertectonic](https://x.com/hypertectonic) |
 | RTX 4090 24GB | 47.7 | 76.3 | 2 | 0.56 | [@Spadav_](https://x.com/Spadav_) |
 | RTX A6000 48GB (Ada) | 26.7 | 52.5 | 2 | 0.54-0.98 | [@lingster](https://github.com/lingster) |
 | RX 7900 XTX 24GB | 30.7 | 43.9 | 2 | 0.60-0.95 | [@Jqianggu](https://x.com/Jqianggu) |
