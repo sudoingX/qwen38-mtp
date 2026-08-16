@@ -110,6 +110,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | GMK EVO-X2, Ryzen AI Max+ 395 (64GB unified, ROCm/HIP) | 10.5-11.1 | 21.4-22.2 | 12 | 0.95-1.0 | [@KyaniteLabs](https://github.com/KyaniteLabs/qwen38-27b-strix-halo) |
 | 2× RTX 5060 Ti 16GB (PP, default `-sm layer`) | 22.1 | 42.8 | 2 | 0.53-0.94 | [@Jackwwg83](https://github.com/Jackwwg83) |
 | 2× RTX 5060 Ti 16GB (TP, `-sm tensor`) | 37.1 | 65.9 | 2 | 0.51-0.88 | [@Jackwwg83](https://github.com/Jackwwg83) |
+| 2× RTX 5060 Ti 16GB (TP, Q4_K_M) | 38.3 | 76.0 | 3 | 0.43-0.93 | [@mgoswick](https://github.com/mgoswick) |
 | RTX 5090 32GB (desktop) | 62.7 | **108.7** | 3 | 0.72 | [@jcr211](https://github.com/jcr211) |
 | RTX 5090 32GB (desktop) | 69.3 | 129.1 | 4 | 0.55 | [@paulomcg](https://github.com/paulomcg) |
 
@@ -133,6 +134,7 @@ Ran the A/B on your card? Open a PR and add a row.
 \* RTX 3090 b10450 row: unsloth Q4_K_M, 131K context, q8_0 KV cache, q8_0 draft KV, llama.cpp b10450 (master `ece963f41`), CUDA/Linux (CachyOS), froggeric fixed chat template, `--reasoning-format deepseek` — method: unchanged `probe.py`, three runs x three prompts, thinking off. Worth noting: the b10450 *baseline* (41.3) equals the original day-one with-flag number for this card — the young hybrid-attention kernels caught up upstream, and the flag now stacks on top of that (+54%).
 \* GMK EVO-X2 row: Ryzen AI Max+ 395 (Strix Halo), 64GB unified memory, Linux, ROCm/HIP llama.cpp (gfx1151, ROCm 7.2.4), unsloth UD-Q4_K_XL, 96K context, f16 KV cache, `--parallel 1`, thinking off — 10.5-11.1 tok/s spec-off baseline; 21.4-22.2 tok/s with `--spec-draft-n-max 12` at 0.95-1.0 acceptance on the bench prompt (novel-traffic acceptance 0.345); stacking `--spec-type draft-mtp,ngram-mod --spec-ngram-mod-n-min 24` takes the streamed count bench to 59.7-64.0 cold and 148-163 warm on back-to-back repeats — the warm figure is an ngram repetition artifact on that prompt, not a general speedup (real novel traffic: prose 11-24, code 30-40 tok/s); production metric is time-per-task, 7.6-14.3 s per correct task across the thermal band. Method: streamed HTTP bench against a live llama-server (not `probe.py`), medians of 3+ runs; one-command reproducer: [bench.sh](https://github.com/KyaniteLabs/qwen38-27b-strix-halo/blob/main/bench.sh), full writeup: [one week with Qwen3.8-27B on Strix Halo](https://kyanitelabs.tech/blog/qwen-27b-strix-halo-one-week-local).
 \* 2× RTX 5060 Ti rows: unsloth UD-Q4_K_XL (sha256 `bee238bb…1372`), 131K context, q4_0 KV cache, llama.cpp built from source at commit `ece963f4` with `-DCMAKE_CUDA_ARCHITECTURES=120`, CUDA 13.0 / driver 580.173.02, PCIe 3.0 x8, `PHB` topology (no P2P). Method: unchanged `probe.py`, three runs x three prompts, thinking off. VRAM: PP 21.7 GB baseline / 23.0 GB with spec; TP 20.9 GB / 22.1 GB. The 16.68 GiB of weights do not fit one 16GB card, so two cards is the floor on this box — the split-mode choice is not optional here, which is what makes the two rows worth reading side by side. Both rows verified at `n_ctx_slot = 131072`. Details under the sweep below.
+\* 2× RTX 5060 Ti Q4_K_M row: unsloth Q4_K_M, 131K context, q4_0 KV cache, `--split-mode tensor`, llama.cpp b10450 (`ece963f`), Windows 11 / CUDA 13.2 native `sm_120a`, driver 596.36, `--parallel 1`. VRAM per GPU: 9,808 MiB baseline / 10,684 MiB at n-max 3. Method: unchanged `probe.py` at commit `b299c0f`, three runs x three prompts, thinking off, warmup discarded. Only the MTP arm added `--spec-type draft-mtp --spec-draft-n-max 3`.
 \* RTX 5090 desktop row: unsloth Qwen3.8 Dynamic NVFP4 (FP8-as-Q8 unified-mtp), 163,840 context, q8_0 KV cache, llama.cpp b10430, Windows/CUDA, driver 610.88 — first NVFP4 quant in the table. Full n-max sweep: 2 → 98.4, **3 → 108.7 (+73%)**, 4 + p-min 0.60 → 103.9, 8 → 92.6 — deep-draft optimum consistent with the A6000 48GB pattern; n-max 8 confirmed worst spec setting. Method: unchanged `probe.py`, three runs x three prompts, thinking at template default (xhigh). Acceptance 0.721 aggregate (1845/2558 from server logs).
 \* RTX 5090 32GB row: unsloth UD-Q4_K_XL, **192K context**, q8_0 KV cache, mmproj loaded (vision, `--image-min-tokens 1024`), llama-swap `unified-cuda-2026-08-14`, Linux/CUDA — 26.5 GB VRAM baseline, 28.5 GB with spec. **Ungated** — see the p-min A/B below. Both arms at `--parallel 1` so only the spec flags differ. Method: stock `probe.py`, medians of three runs x three prompts, thinking off. n-max sweep at p-min 0.60 below.
 \* RTX 3090 turboquant row: unsloth Q4_K_M, 131K context, q4_0 KV cache, custom turboquant llama.cpp at commit `95b18c0`, NVIDIA driver 610.43.03, `--parallel 1`, all layers on GPU, thinking off. Method: unchanged `probe.py`, medians of three runs x three prompts, same setup both arms. MTP at n-max 6 with p-min 0.75.
@@ -363,6 +365,23 @@ Upstream says `--parallel 1` is required for spec-decode; the 3x3090 row reports
 **Speculative decoding is a single-stream optimisation.** At N=1 it is worth 1.70x. By N=2 the advantage is inside the noise, and at N=4 the two arms are indistinguishable (29.48 vs 29.24) — once the batch is full the GPU has real work queued and there is no idle verification capacity for the draft head to exploit. If you serve concurrent users, tune `--parallel` and skip the spec flags; if you are one person at a terminal, the flags are most of your speed.
 
 One side effect worth a line: across every arm the MTP runs drew *less* power than their spec-off controls while producing more tokens — combined peak 268 W vs 293 W on the depth sweep, 267 W vs 305 W under concurrency. The draft head is not buying speed with watts.
+
+#### Independent Q4_K_M replication and production follow-up
+
+A second Windows dual-5060-Ti host independently repeated the tensor-split sweep using Unsloth Q4_K_M rather than UD-Q4_K_XL. Same GGUF and serving configuration within every A/B; only the spec flags changed. Upstream `probe.py` was unchanged, with three runs x three prompts and thinking off.
+
+| config | Overall median | Overall mean | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Aggregate acceptance |
+|---|---:|---:|---:|---:|---:|---:|
+| spec off | 38.3 | 38.3 | 38.3 | 38.5 | 38.3 | — |
+| n-max 2 | 72.0 | 69.5 | 79.2 | 56.3 | 72.0 | 78.1% |
+| **n-max 3** | **76.0** | **73.8** | 86.6 | **57.5** | **76.0** | 71.4% |
+| n-max 4 | **76.0** | 72.8 | **94.4** | 51.2 | **76.0** | 64.8% |
+
+The result reproduces the main finding above with a different quant and host: tensor split lifts the spec-off baseline from 23.1 tok/s under layer split to 38.3 (+66%), before MTP. Tensor n-max 3 reaches 76.0 tok/s, 3.29x the original layer-split baseline. N-max 3 is the mixed-workload choice because it has the highest mean and prose result; n-max 4 remains the code-specialized arm.
+
+A separate production-layout follow-up loaded the BF16 vision projector and used q8_0 for both main and draft KV. At 65,543 active prompt tokens, tensor n-max 3 decoded at 58.75 tok/s; at 129,007 tokens it decoded at 44.26 tok/s after 707.4 tok/s prefill. Both depths returned three hidden needle codes exactly. Two deterministic 1,200-token agent tasks decoded at 62.9 tok/s for business operations and 83.4 tok/s for Python, and their streamed responses matched buffered output byte-for-byte.
+
+One Windows-specific memory result: `--load-mode none` reduced physical RAM added after load from 16.33 GiB to 1.85 GiB versus default `auto`/mmap. The same two 1,200-token outputs remained byte-identical, with effectively unchanged decode (63.18/83.58 versus 63.06/83.95 tok/s). Executable worker gates also passed literal CRUD (5/5), deterministic scoring (5/5), and structured-agent JSON validation. These are supplemental production checks, not part of the main-table paired A/B.
 
 ### RTX 5090 32GB (desktop): the p-min gate is inverted here too
 
