@@ -254,18 +254,7 @@ Upstream says `--parallel 1` is required for spec-decode; the 3x3090 row reports
 
 **Speculative decoding is a single-stream optimisation.** At N=1 it is worth 1.70x. By N=2 the advantage is inside the noise, and at N=4 the two arms are indistinguishable (29.48 vs 29.24) — once the batch is full the GPU has real work queued and there is no idle verification capacity for the draft head to exploit. If you serve concurrent users, tune `--parallel` and skip the spec flags; if you are one person at a terminal, the flags are most of your speed.
 
-#### Power
-
-Sampled every 2s across the depth and concurrency arms, per GPU:
-
-| arm | GPU0 peak / mean | GPU1 peak / mean | combined peak / mean |
-|---|---|---|---|
-| depth, spec off | 139 W / 106 W | 154 W / 116 W | 293 W / 222 W |
-| depth, MTP n-3 | 127 W / 98 W | 142 W / 108 W | 268 W / 205 W |
-| concurrency, spec off | 147 W / 95 W | 158 W / 104 W | 305 W / 199 W |
-| concurrency, MTP n-3 | 129 W / 83 W | 138 W / 91 W | 267 W / 174 W |
-
-The cards are rated 180 W each and never approach it — this workload is memory-bound, not compute-bound, which is the same reason tensor-split helps so much. MTP arms draw *less* power than their controls while producing more tokens.
+One side effect worth a line: across every arm the MTP runs drew *less* power than their spec-off controls while producing more tokens — combined peak 268 W vs 293 W on the depth sweep, 267 W vs 305 W under concurrency. The draft head is not buying speed with watts.
 
 ## License
 
