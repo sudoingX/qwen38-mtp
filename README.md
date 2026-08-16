@@ -92,6 +92,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | 2x RX 9070 16GB (Vulkan) | 22.1 | 41.6 | 2 | 0.73 | [@tomertec](https://github.com/tomertec) |
 | AMD Radeon AI PRO R9700 32GB | 27.0 | 43.3 | 2 | 0.60-0.94 | [@ajnytebot](https://github.com/ajnytebot) |
 | Ryzen AI Max+ 395 / Radeon 8060S | 11.5 | 23.7 | 2 | 0.52-0.94 | [@shiwuxiu](https://github.com/shiwuxiu) |
+| RTX PRO 6000 Blackwell Max-Q 96GB | 45.7 | 97.1 | 2 | 0.52-0.95 | [@awilliamson](https://github.com/awilliamson) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -101,6 +102,7 @@ Ran the A/B on your card? Open a PR and add a row.
 \* R9700 row: unsloth UD-Q4_K_XL, 262K context, q4_0 KV cache, llama.cpp b10433, Vulkan/RADV — 22.53 GB VRAM baseline, 24.55 GB with n-max 2. Method: unchanged `probe.py` at commit `67c20536`, three runs x three prompts, thinking off.
 \* Ryzen AI Max+ 395 row: 64GB unified memory, unsloth UD-Q4_K_XL, 32K context, q8_0 KV cache, llama.cpp b10437, Windows build 26200, Vulkan with AMD driver 32.0.31035.1003. Method: unchanged `probe.py` at commit `67c2053`, three runs x three prompts, thinking off.
 \* RTX 4090 Spadav_ row: unsloth Q4_K_M, 200K context, q4_0 KV cache, q8_0 draft KV, mmproj loaded (888MB on GPU) — method: stock probe.py + 4096-token curl (MTP crossover: overhead dominates at ≤400 tokens, +60% at 4096 tokens).
+\* RTX PRO 6000 Blackwell Max-Q row: lmstudio-community/Qwen3.8-27B-GGUF Q8_0, 131K context, q4_0 K/V cache, llama.cpp 0.1.0-dev build 10454 (`4df29be4f`), built with GNU 16.1.1 for Linux x86_64 / CUDA 13.3.1-1, RTX PRO 6000 Blackwell Max-Q Workstation Edition 96GB at 300W, `--parallel 1`. VRAM: 32.072 GiB baseline / 33.540 GiB with spec (+1468 MiB). Method: unchanged `probe.py`, three runs x three prompts, thinking off; qwen38-mtp (28527fc55) commit used for `probe.py`.
 
 ### A6000 48GB: n-max sweep
 
@@ -173,6 +175,93 @@ Same 64GB Strix Halo system, same unsloth UD-Q4_K_XL model and serving config as
 | 4 | 23.5 | **29.9** | 16.5 | 23.5 | 0.35-0.91 (65.8% aggregate) |
 
 MTP n-max 2 doubles the overall median versus the 11.5 tok/s spec-off control (+106%). N-max 4 is effectively flat overall (-0.8% versus n-max 2), but the workload split is sharp: Python rises 18.7% while prose falls 13.6%. This system keeps n-max 2 for mixed use and treats n-max 4 as a code-specialized option.
+
+
+### RTX PRO 6000 Blackwell Max-Q 96GB: n-max and p-min tuning
+
+Same RTX PRO 6000 Blackwell Max-Q host and serving configuration as the
+community row above: lmstudio-community/Qwen3.8-27B-GGUF Q8_0, 131K context,
+q4_0 K/V cache, llama.cpp 0.1.0-dev build 10454 (`4df29be4f`), Linux/CUDA,
+`--parallel 1`. Upstream `probe.py` was unchanged; all reported prompt values
+are medians of three runs with thinking off.
+
+The main-table A/B is spec-off versus n-max 2. The sweep below is additional
+tuning and does not replace that comparable n-max 2 row.
+
+#### Ungated n-max sweep
+
+| n-max | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Acceptance |
+|---|---:|---:|---:|---:|---:|
+| spec off | 45.7 | 46.0 | 46.0 | 45.0 | — |
+| 1 | 73.9 | 76.7 | 67.0 | 73.9 | 0.69-0.97 |
+| **2** | **97.1** | 101.8 | 75.5 | 97.1 | **0.52-0.95** |
+| 3 | 101.0 | 121.3 | **78.8** | 101.0 | 0.44-0.96 |
+| **4** | **108.1** | 129.6 | 71.3 | **108.1** | 0.35-0.89 |
+| 5 | 103.5 | **141.5** | 60.7 | 103.5 | 0.24-0.86 |
+| 6 | 104.9 | 140.4 | 65.8 | 104.9 | 0.27-0.81 |
+
+The comparable n-max 2 arm more than doubles the baseline, from 45.7 to
+97.1 tok/s (**+112.5%**). Ungated throughput continues rising beyond n-max 2
+on this card and peaks overall at n-max 4, 108.1 tok/s (**+136.5%** versus
+spec-off). The workload split is pronounced: Python continues to n-max 5 at
+141.5 tok/s, while prose peaks at n-max 3 and falls sharply as the draft
+window deepens.
+
+Acceptance follows the same split. At n-max 4 the code prompt still accepts
+roughly 0.82-0.89 of drafted tokens, while the prose prompt is only about
+0.35-0.38. At n-max 5 prose falls to roughly 0.24-0.29 while Python remains
+above 0.80. This made the host a useful case for testing the second knob,
+`--spec-draft-p-min`.
+
+#### p-min sweep at n-max 5
+
+N-max was fixed at 5, where ungated Python throughput was highest, and
+`--spec-draft-p-min` was swept from 0.20 through 0.80.
+
+| n-max | p-min | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Aggregate acceptance |
+|---:|---:|---:|---:|---:|---:|---:|
+| 5 | 0.00 | 103.5 | 141.5 | 60.7 | 103.5 | 54.3% |
+| 5 | 0.20 | 105.5 | 137.5 | 68.8 | 105.5 | 58.2% |
+| 5 | **0.30** | **115.5** | **147.4** | **73.6** | **115.5** | 64.6% |
+| 5 | 0.40 | 110.9 | 140.9 | 67.6 | 110.9 | 64.8% |
+| 5 | 0.50 | 106.3 | 145.5 | 66.0 | 106.3 | 70.7% |
+| 5 | 0.60 | 110.9 | 142.6 | 71.5 | 110.9 | 77.1% |
+| 5 | 0.70 | 106.8 | 132.7 | 68.9 | 106.8 | 82.1% |
+| 5 | 0.80 | 99.2 | 124.4 | 63.2 | 99.2 | 85.8% |
+
+P-min 0.30 is the best tested gate at n-max 5. It raises overall throughput
+from 103.5 tok/s ungated to 115.5 tok/s (**+11.6%**), while improving all
+three prompts: Python 141.5 -> 147.4, prose 60.7 -> 73.6, and Bash
+103.5 -> 115.5 tok/s. Against spec-off, the tuned result is **+152.7%**.
+
+Higher p-min values increase aggregate acceptance in this sweep, but not
+throughput. By p-min 0.80 acceptance reaches 85.8% while overall throughput
+falls to 99.2 tok/s. Acceptance alone is therefore not the tuning target; the
+useful point balances speculative depth, confidence gating, and verification
+cost.
+
+#### Gated depth check at p-min 0.30
+
+The best p-min was then held fixed while n-max was varied around and above the
+winning depth.
+
+| n-max | p-min | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Aggregate acceptance |
+|---:|---:|---:|---:|---:|---:|---:|
+| 4 | 0.30 | 98.5 | 130.7 | **78.0** | 98.5 | 66.1% |
+| **5** | **0.30** | **115.5** | 147.4 | 73.6 | **115.5** | 64.6% |
+| 6 | 0.30 | 110.1 | 147.1 | 71.0 | 110.1 | 56.4% |
+| 7 | 0.30 | 110.0 | **149.9** | 69.2 | 110.0 | 51.7% |
+| 8 | 0.30 | 111.6 | 144.2 | 65.0 | 111.6 | 47.1% |
+
+The gate does not improve every depth: n-max 4 with p-min 0.30 falls to
+98.5 tok/s, below the 108.1 tok/s ungated n-max 4 result. The two knobs
+interact rather than contributing independently.
+
+The best tested overall `probe.py` setting on this host is therefore
+n-max 5 / p-min 0.30 at 115.5 tok/s. Going deeper does not improve mixed
+throughput. Python reaches 149.9 tok/s at n-max 7, but that is only 1.7% above
+n-max 5 and comes with lower prose throughput, lower aggregate acceptance,
+and greater run-to-run variance.
 
 ## License
 
