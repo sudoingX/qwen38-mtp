@@ -120,8 +120,8 @@ Ran the A/B on your card? Open a PR and add a row.
 \* RX 9070 row: two 16GB cards on one 31.84 GiB pool, Vulkan build b10426, unsloth UD-Q4_K_XL, **262K context**, q8_0 KV cache — 28.0 GiB across the pool with spec. Method differs from the rows above and is spelled out under the sweep below.
 \* R9700 row: unsloth UD-Q4_K_XL, 262K context, q4_0 KV cache, llama.cpp b10433, Vulkan/RADV — 22.53 GB VRAM baseline, 24.55 GB with n-max 2. Method: unchanged `probe.py` at commit `67c20536`, three runs x three prompts, thinking off.
 \* Ryzen AI Max+ 395 row: 64GB unified memory, unsloth UD-Q4_K_XL, 32K context, q8_0 KV cache, llama.cpp b10437, Windows build 26200, Vulkan with AMD driver 32.0.31035.1003. Method: unchanged `probe.py` at commit `67c2053`, three runs x three prompts, thinking off.
-\* RX 7900 GRE row: custom AtomicChat IQ3_XXS quant (not unsloth Q4_K_M), 90K context, turbo3/turboquant KV cache, llama.cpp 1655 (2168b0cd8) in a custom llama-cpp-turboquant Docker image, Debian 13 trixie, kernel 6.12.101, Vulkan/AMD Navi 31, --parallel 1, --reasoning-budget 512, flash-attn on. VRAM 15.35 GB / 16 GB (~96%) at measurement. No spec-off baseline was run on this card — the model was deployed spec-on from the start, hence the N/A cell. Method differs from the rows above and is spelled out below.
-\* RTX 3090 turbo3 row: same host (RTX 3090 24GB, Debian 12, Ryzen 7 9700X, CPB disabled), unsloth Q4_K_M, **both arms MTP-on** (`--spec-type draft-mtp --spec-draft-n-max 3 --spec-draft-p-min 0.75 --spec-default`, `-np 1`) — this row compares two KV cache configurations, not spec-off vs spec-on. Baseline arm: q4_0 KV, 185K context, llama27b-mtp:cuda image (mtp-clean fork), live Hermes agent traffic (14 completed turns, 100–2700 output tokens, avg 37.2 tok/s, acceptance 0.57). Flag arm: **turbo3 KV, 200K (204800) context** (262K exceeded 24 GB at model load), llama-cpp-turboquant:cuda-latest (v10465, fca3093c9), clean probe 3×400 tokens, medians of 3, avg 54.2 tok/s (48.06–58.34), acceptance 0.64–0.84. VRAM 23.0/23.3 GB of 24.6 GB (~94–95%), 52–63°C. Confound disclosed: the two arms run different llama.cpp builds (mtp-clean vs turboquant v10465), so part of the delta is the newer build, not only the KV cache. Method differs from the rows above and is spelled out below.
+\* RX 7900 GRE section: custom AtomicChat IQ3_XXS quant (not unsloth Q4_K_M), 90K context, turbo3/turboquant KV cache, llama.cpp 1655 (2168b0cd8) in a custom llama-cpp-turboquant Docker image, Debian 13 trixie, kernel 6.12.101, Vulkan/AMD Navi 31, --parallel 1, --reasoning-budget 512, flash-attn on. MTP arm: VRAM 15.35 GB / 16 GB (~96%); spec-off baseline arm (added 2026-08-16, fresh --rm container): 13.77 GB / 16 GB. Both arms live Hermes agent traffic. Method differs from the rows above and is spelled out under the section below.
+\* RTX 3090 turbo3 section: same host (RTX 3090 24GB, Debian 12, Ryzen 7 9700X, CPB disabled), unsloth Q4_K_M, **both arms MTP-on** (`--spec-type draft-mtp --spec-draft-n-max 3 --spec-draft-p-min 0.75 --spec-default`, `-np 1`) — this row compares two KV cache configurations, not spec-off vs spec-on. Baseline arm: q4_0 KV, 185K context, llama27b-mtp:cuda image (mtp-clean fork), live Hermes agent traffic (14 completed turns, 100–2700 output tokens, avg 37.2 tok/s, acceptance 0.57). Flag arm: **turbo3 KV, 200K (204800) context** (262K exceeded 24 GB at model load), llama-cpp-turboquant:cuda-latest (v10465, fca3093c9), clean probe 3×400 tokens, medians of 3, avg 54.2 tok/s (48.06–58.34), acceptance 0.64–0.84. VRAM 23.0/23.3 GB of 24.6 GB (~94–95%), 52–63°C. Confound disclosed: the two arms run different llama.cpp builds (mtp-clean vs turboquant v10465), so part of the delta is the newer build, not only the KV cache. Method differs from the rows above and is spelled out below.
 \* RTX 4090 Spadav_ row: unsloth Q4_K_M, 200K context, q4_0 KV cache, q8_0 draft KV, mmproj loaded (888MB on GPU) — method: stock probe.py + 4096-token curl (MTP crossover: overhead dominates at ≤400 tokens, +60% at 4096 tokens).
 \* Radeon 890M row: Ryzen AI 9 HX 370 (Strix Point, gfx1150), 48 GB UMA carve of 96 GB DDR5, unsloth UD-Q4_K_XL, **131K context**, q4_0 KV cache, llama.cpp Vulkan/RADV, Ubuntu 26.04 — 19.15 GB VRAM baseline, 20.13 GB with n-max 2. Method: unchanged `probe.py`, three runs x three prompts, thinking off. Note this is a *different* APU class from the Ryzen AI Max+ 395 row above: Strix Point 890M is 16 CUs on a 128-bit bus, Strix Halo 8060S is 40 CUs on 256-bit, and this row holds 131K context resident against that row's 32K — both differences push this baseline down.
 \* RTX PRO 6000 row: unsloth Q4_K_M, 131K context, q4_0 KV cache, llama.cpp b10335, CUDA — method: stock `probe.py`, thinking off, `--parallel 1` both sides. n-max 4 on this card: 85.7 overall (code 105.7 up, prose 58.8 down, acceptance 0.65-0.77) — overall peaks at n-max 2 here, same code-up/prose-down shape as the A6000 and 3×3090 sweeps. Cross-engine bonus on the same card: vLLM 0.27.1 with unsloth's NVFP4 build and MTP (`--speculative-config '{"method":"mtp","num_speculative_tokens":N}'`) gives 63.3 -> 96.1 at n=2 and 116.3 (+84%) at n=4 — vLLM keeps climbing where llama.cpp has peaked. (An earlier revision carried a streamed-word-drop caveat for vLLM MTP; it was traced to the benchmark harness's own SSE parsing — a grep regex truncating multi-token deltas at escaped quotes — not to vLLM. Retracted with verification at [vllm-project/vllm#52469](https://github.com/vllm-project/vllm/issues/52469), closed; streamed output is byte-identical to non-streamed with MTP on.)
@@ -404,7 +404,7 @@ unassisted at `--parallel 2`; at `--parallel 1`, same everything else, it is
 MTP arm against a `--parallel 2` baseline reads as +133% when the honest figure
 is +86%. Measure both arms at `--parallel 1`.
 
-### RX 7900 GRE 16GB: packed-16GB live-traffic study (no spec-off baseline)
+### RX 7900 GRE 16GB: packed-16GB live-traffic study, spec-off baseline added 2026-08-16
 
 Same host, same model, same serve, only the spec flags varying. The card runs the custom AtomicChat IQ3_XXS quant at 90K context with turbo3/turboquant KV — VRAM sits at 15.35 GB of 16 GB (~96%), so this is the tightest 16 GB rig in the table, and the config was tuned for a live Hermes agent session, not a clean probe run.
 
@@ -423,7 +423,28 @@ Live serve, one slot (`-np 1`), `--spec-type draft-mtp --spec-draft-n-max 3 --sp
 
 Average decode **47.8 tok/s** (best 53.8, worst 36.6 — the 150-token turn, where the spec overhead dominates exactly as the length rule predicts). Acceptance band **0.87–0.96, average ~0.93**; mean draft length 2.55–3.71, i.e. n-max 3 was almost fully consumed. Prompt processing held 239–314 tok/s (3.3–4.2 ms/token) across the 29K–37K context growth. Vulkan compute-graph reuse climbed 757 → 1420 over the session.
 
-No spec-off baseline was run on this card: the model was deployed spec-on from the start, so the "Baseline" cell above is N/A rather than a measured number.
+**Spec-off baseline, measured 2026-08-16** (the card was deployed spec-on from the start, so this was back-filled): same host, same model, same turbo3 KV, same 90K context — the only variable removed is MTP (no `--spec-type/--spec-draft-*` flags), run in a fresh `--rm` container on port 8095 under the same live Hermes agent session (context grew to ~45K). Server-log `print_timing` over the final turns:
+
+| Task | Output | Decode | Prompt eval |
+|---|---|---|---|
+| 8 | 251 tok | 34.08 tok/s | 300 tok @ 246.8 tok/s |
+| 10 | 150 tok | 30.94 tok/s | 20,265 tok @ 460.7 tok/s (cold) |
+| 425 | 455 tok | 30.58 tok/s | 3,753 tok @ 370.8 tok/s |
+| 885 | 84 tok | 30.94 tok/s | 356 tok @ 261.7 tok/s |
+| 2059 | 116 tok | 29.42 tok/s | 132 tok @ 205.1 tok/s |
+| 2177 | 1,290 tok | 28.96 tok/s | 1,852 tok @ 301.9 tok/s |
+| 3470 | 93 tok | 29.40 tok/s | 946 tok @ 265.1 tok/s |
+| 4379 | 610 tok | 28.71 tok/s | 829 tok @ 251.0 tok/s |
+| 4993 | 186 tok | 28.80 tok/s | 303 tok @ 223.4 tok/s |
+| 5181 | 305 tok | 28.70 tok/s | 328 tok @ 232.7 tok/s |
+| 5488 | 351 tok | 28.51 tok/s | 272 tok @ 208.3 tok/s |
+| 5841 | 200 tok | 28.53 tok/s | 292 tok @ 222.1 tok/s |
+| 6043 | 152 tok | 33.13 tok/s | 2,565 tok @ 497.1 tok/s |
+| 6199 | 232 tok | 28.49 tok/s | 320 tok @ 235.2 tok/s |
+
+Decode settled at **28.5–28.8 tok/s (avg ~28.7)** by 35–45K context; the early 34 tok/s figures are small-context turns. VRAM: **13.77 GB of 16 GB** (15.35 GB with MTP — the draft context costs ~1.58 GB on top of the packed weights + KV).
+
+**Honest read of the A/B:** the baseline band (28.5–28.8 at 35–45K) sits ~1.5K tokens *above* the MTP band's top (37K), where this card's spec-on decode is already at its floor (44.5 tok/s). MTP-on therefore gained at least **+54%** over the same card's unassisted decode at adjacent context — the true figure at equal context is probably a few points higher, but we do not claim more than the measured numbers show. Two structural notes: (1) without MTP the 90K slot fits with ~2.2 GB to spare, so the spec-on deployment was *not* forced by VRAM — MTP bought speed, not context; (2) the baseline's cold prefill (460–497 tok/s) is faster than the MTP serve's (239–314 tok/s) — the draft head's overhead lands on prompt processing, not just decode.
 
 **p-min 0.60 vs 0.75, A/B on the same serve** (container restarted between arms, same 400-token probe plus live agent traffic):
 
@@ -434,10 +455,12 @@ No spec-off baseline was run on this card: the model was deployed spec-on from t
 
 At 0.60 the head drafts past its confidence gate and acceptance drops ~0.15–0.25; the speed gain is a flat ~7% idle and the long-turn acceptance collapses to 0.67 under real traffic. This card is the counterpoint to the RX 9070 pair's finding that 0.60 "makes deeper n-max nearly free": with 16 GB at 96% VRAM and n-max 3, the gate at 0.75 already keeps rejection cheap, and loosening it just buys noise. The 0.60 number is also a single-run screen (the 9070 section's own warning applies: medians of 3 before deploying), but the acceptance delta is too large to ignore.
 
-What this row adds to the table:
+What this section adds:
 
+- **Spec-off baseline back-filled 2026-08-16:** 28.5–28.8 tok/s unassisted at 35–45K context versus 44.5–53.8 with MTP — at least **+54%** at adjacent context on the same card (context bands differ by ~1.5K tokens; equal-context figure would be a few points higher, not claimed).
+- **The deployment was speed-driven, not VRAM-forced:** without MTP the same 90K slot fits with ~2.2 GB to spare (13.77 GB of 16 GB). MTP cost ~1.58 GB of draft context and bought the speed.
 - **n-max 3 holds as a daily driver at 0.93 average acceptance on RDNA3 16 GB** — the 5090 sweep's "run 2 as your daily" did not apply here; at 0.75 the third draft slot was accepted almost all the time, so there was nothing to give back.
-- **VRAM headroom is a hidden variable.** Every row in this table runs with 40%+ of the card's VRAM free; this one runs at 96%. The acceptance and speed bands above are what MTP does on a fully packed 16 GB card, not a comfortable 24 GB one.
+- **VRAM headroom is a hidden variable.** Every row in the main table runs with 40%+ of the card's VRAM free; this one runs at 96%. The acceptance and speed bands above are what MTP does on a fully packed 16 GB card, not a comfortable 24 GB one.
 - **The p-min knob is workload- and VRAM-dependent**, not just card-size-dependent: 0.60 won on the 2×9070 pool, 0.75 wins here.
 
 ### RTX 3090 24GB: the KV cache is a third tuning knob (q4_0 vs turbo3, both MTP-on)
@@ -457,7 +480,7 @@ Honest caveats, in order of size:
 2. **262K does not fit.** The turbo3 arm was planned at 262K (the repo's standard window) but the container failed to load the model at that size on 24 GB; 200K (204800) was the working ceiling. The q4_0 arm's 185K is its own working ceiling at `--cache-ram 10384`.
 3. **Arm methods differ.** The baseline arm is live Hermes agent traffic (thinking on, real tool-call turns, 100–2700 output tokens) — realistic but noisier. The flag arm is a clean 3×400-token probe — controlled but short, which per the length rule underestimates the flag arm's advantage (spec scales with generation length).
 
-What this row adds to the table:
+What this section adds:
 
 - **The KV cache type is a hidden third knob.** The community rules so far cover n-max and p-min; on a fully packed 24 GB card, q4_0 → turbo3 at n-max 3 is another large delta with the spec head already engaged.
 - **Turbo3 + MTP + 204K fits a 24 GB card at ~95% VRAM** — the A6000 row shows 256K q8_0 at 40 GB; this is the 24 GB equivalent.
