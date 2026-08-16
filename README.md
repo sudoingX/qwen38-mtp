@@ -112,6 +112,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | 2× RTX 5060 Ti 16GB (TP, `-sm tensor`) | 37.1 | 65.9 | 2 | 0.51-0.88 | [@Jackwwg83](https://github.com/Jackwwg83) |
 | RTX 5090 32GB (desktop) | 62.7 | **108.7** | 3 | 0.72 | [@jcr211](https://github.com/jcr211) |
 | RTX 5090 32GB (desktop) | 69.3 | 129.1 | 4 | 0.55 | [@paulomcg](https://github.com/paulomcg) |
+| RTX 5090 32GB (UD-Q5_K_XL, 262K) | 69.5 | 162.9 | 4 | 0.35-0.96 | [@lyesrock](https://github.com/lyesrock) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -136,6 +137,7 @@ Ran the A/B on your card? Open a PR and add a row.
 \* RTX 5090 desktop row: unsloth Qwen3.8 Dynamic NVFP4 (FP8-as-Q8 unified-mtp), 163,840 context, q8_0 KV cache, llama.cpp b10430, Windows/CUDA, driver 610.88 — first NVFP4 quant in the table. Full n-max sweep: 2 → 98.4, **3 → 108.7 (+73%)**, 4 + p-min 0.60 → 103.9, 8 → 92.6 — deep-draft optimum consistent with the A6000 48GB pattern; n-max 8 confirmed worst spec setting. Method: unchanged `probe.py`, three runs x three prompts, thinking at template default (xhigh). Acceptance 0.721 aggregate (1845/2558 from server logs).
 \* RTX 5090 32GB row: unsloth UD-Q4_K_XL, **192K context**, q8_0 KV cache, mmproj loaded (vision, `--image-min-tokens 1024`), llama-swap `unified-cuda-2026-08-14`, Linux/CUDA — 26.5 GB VRAM baseline, 28.5 GB with spec. **Ungated** — see the p-min A/B below. Both arms at `--parallel 1` so only the spec flags differ. Method: stock `probe.py`, medians of three runs x three prompts, thinking off. n-max sweep at p-min 0.60 below.
 \* RTX 3090 turboquant row: unsloth Q4_K_M, 131K context, q4_0 KV cache, custom turboquant llama.cpp at commit `95b18c0`, NVIDIA driver 610.43.03, `--parallel 1`, all layers on GPU, thinking off. Method: unchanged `probe.py`, medians of three runs x three prompts, same setup both arms. MTP at n-max 6 with p-min 0.75.
+\* RTX 5090 32GB UD-Q5_K_XL 262K row: unsloth UD-Q5_K_XL, 262K context, q4_0 KV cache, llama.cpp b10453 (`3cb7ffb1a`), Linux/CUDA, driver 610.57.04. Loaded VRAM ~32.1 GB (model + KV). Method: unchanged `probe.py`, three runs x three prompts, thinking off, warmup discarded. Both arms at `--parallel 1`. Baseline 69.5 tok/s; with `--spec-type draft-mtp --spec-draft-n-max 4` (ungated, no p-min) 162.9 tok/s (+134%). Acceptance 0.35-0.96 (avg 0.65). Multi-model sweep under the section below.
 
 ### A6000 48GB: n-max sweep
 
@@ -401,6 +403,26 @@ unassisted at `--parallel 2`; at `--parallel 1`, same everything else, it is
 69.3. **`--parallel 2` alone costs ~20% of single-stream decode.** Pairing an
 MTP arm against a `--parallel 2` baseline reads as +133% when the honest figure
 is +86%. Measure both arms at `--parallel 1`.
+
+### RTX 5090 32GB (UD-Q5_K_XL): multi-model MTP sweep
+
+Same 5090, same llama.cpp b10453, same method (probe.py, 3 runs x 3 prompts, thinking off, --parallel 1, q4_0 KV, 262K context for the 27B/MoE models, 65K for the 9B/4B). Five Qwen models swept across n-max 2/4/6 gated (p-min 0.75) and n-max 4 ungated:
+
+| Model (UD-Q5_K_XL) | Baseline | n2 gated | n4 gated | n6 gated | n4 ungated | Winner | Gain |
+|---|---|---|---|---|---|---|---|
+| Qwen3.8-27B dense | 69.5 | 122.2 | 139.5 | **147.5** (0.69-0.87) | 155.8 (0.31-0.87) | n6 gated | +112% |
+| Qwen3.6-27B dense | 69.5 | 121.0 | 133.5 | 138.9 (0.80-1.00) | **160.5** (0.35-0.96) | n4 ungated | +131% |
+| Qwen3.6-35B-A3B MoE | 270.3 | 230.1 | 258.1 | 297.5 (0.67-0.98) | **288.7** (0.34-0.89) | n6 gated | +10% |
+| Qwen3.5-9B | 202.4 | 264.2 | **276.7** (0.82-1.00) | — | — | n4 gated | +37% |
+| Qwen3.5-4B | 302.1 | 350.7 | **357.2** (0.82-0.97) | — | — | n4 gated | +18% |
+
+Findings:
+
+- **Ungated wins on the 27B dense but not on the MoE.** Qwen3.6-27B ungated n4 (160.5) beats gated n6 (138.9) by +16%, consistent with the other desktop 5090 rows in the table. But on the 35B-A3B MoE, gated n6 (297.5) beats ungated n4 (288.7) — the MoE baseline is already fast (270 tok/s) and the verification cost of ungated drafting eats the win.
+- **n-max 6 beats n-max 4 on the 3.8-27B dense** (147.5 vs 139.5 gated), the opposite of the 24GB card pattern where n-max 2-4 peaks. The 5090 has enough bandwidth to absorb the deeper verification.
+- **Small models (9B, 4B) prefer gated n4** (acceptance 0.91-0.93) — the ungated arm was not tested on these because the baseline is already 200-300 tok/s and the MTP gain is modest (+18-37%).
+- **MoE gain is small** (+10% best case) — the model is already bandwidth-rich without spec. Same pattern as the P40 sweep (MoE +35% on a bandwidth-starved card, +10% on a bandwidth-rich one).
+
 
 ## License
 
