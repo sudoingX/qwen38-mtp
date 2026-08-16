@@ -406,6 +406,8 @@ is +86%. Measure both arms at `--parallel 1`.
 
 ### RX 7900 GRE 16GB: packed-16GB live-traffic study, spec-off baseline added 2026-08-16
 
+Data: [@lsunay](https://x.com/lsunay1), Hermes agent on PC-12.
+
 Same host, same model, same serve, only the spec flags varying. The card runs the custom AtomicChat IQ3_XXS quant at 90K context with turbo3/turboquant KV — VRAM sits at 15.35 GB of 16 GB (~96%), so this is the tightest 16 GB rig in the table, and the config was tuned for a live Hermes agent session, not a clean probe run.
 
 Live serve, one slot (`-np 1`), `--spec-type draft-mtp --spec-draft-n-max 3 --spec-draft-p-min 0.75`. Decode speeds and draft acceptance from the server log over eight consecutive real agent turns (context growing 29.2K → 37.0K tokens between turns):
@@ -464,6 +466,8 @@ What this section adds:
 - **The p-min knob is workload- and VRAM-dependent**, not just card-size-dependent: 0.60 won on the 2×9070 pool, 0.75 wins here.
 
 ### RTX 3090 24GB: the KV cache is a third tuning knob (q4_0 vs turbo3, both MTP-on)
+
+Data: [@lsunay](https://x.com/lsunay1), Hermes agent on PC-18.
 
 Same host, same quant (unsloth Q4_K_M), same spec flags on both arms: `--spec-type draft-mtp --spec-draft-n-max 3 --spec-draft-p-min 0.75 --spec-default`, `-np 1`, `-fa on`. Only the KV cache and the llama.cpp build differ — this is a cache A/B, not a spec-on/off A/B, and both arms are MTP-on.
 
