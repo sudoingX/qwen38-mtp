@@ -112,6 +112,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | 2× RTX 5060 Ti 16GB (TP, `-sm tensor`) | 37.1 | 65.9 | 2 | 0.51-0.88 | [@Jackwwg83](https://github.com/Jackwwg83) |
 | RTX 5090 32GB (desktop) | 62.7 | **108.7** | 3 | 0.72 | [@jcr211](https://github.com/jcr211) |
 | RTX 5090 32GB (desktop) | 69.3 | 129.1 | 4 | 0.55 | [@paulomcg](https://github.com/paulomcg) |
+| RTX 5090 32GB (UD-Q4_K_XL, 262K, q4_0 KV) | 76.3 | 171.7 | 4 | 0.69-0.87 | [@lyesrock](https://github.com/lyesrock) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -136,6 +137,7 @@ Ran the A/B on your card? Open a PR and add a row.
 \* RTX 5090 desktop row: unsloth Qwen3.8 Dynamic NVFP4 (FP8-as-Q8 unified-mtp), 163,840 context, q8_0 KV cache, llama.cpp b10430, Windows/CUDA, driver 610.88 — first NVFP4 quant in the table. Full n-max sweep: 2 → 98.4, **3 → 108.7 (+73%)**, 4 + p-min 0.60 → 103.9, 8 → 92.6 — deep-draft optimum consistent with the A6000 48GB pattern; n-max 8 confirmed worst spec setting. Method: unchanged `probe.py`, three runs x three prompts, thinking at template default (xhigh). Acceptance 0.721 aggregate (1845/2558 from server logs).
 \* RTX 5090 32GB row: unsloth UD-Q4_K_XL, **192K context**, q8_0 KV cache, mmproj loaded (vision, `--image-min-tokens 1024`), llama-swap `unified-cuda-2026-08-14`, Linux/CUDA — 26.5 GB VRAM baseline, 28.5 GB with spec. **Ungated** — see the p-min A/B below. Both arms at `--parallel 1` so only the spec flags differ. Method: stock `probe.py`, medians of three runs x three prompts, thinking off. n-max sweep at p-min 0.60 below.
 \* RTX 3090 turboquant row: unsloth Q4_K_M, 131K context, q4_0 KV cache, custom turboquant llama.cpp at commit `95b18c0`, NVIDIA driver 610.43.03, `--parallel 1`, all layers on GPU, thinking off. Method: unchanged `probe.py`, medians of three runs x three prompts, same setup both arms. MTP at n-max 6 with p-min 0.75.
+\* RTX 5090 32GB UD-Q4_K_XL 262K q4_0 KV row: unsloth UD-Q4_K_XL, 262K context, q4_0 KV cache (both K and V), llama.cpp b10453 (`3cb7ffb1a`), Linux/CUDA, driver 610.57.04. Loaded VRAM ~25.8 GB. Method: unchanged `probe.py`, three runs x three prompts, thinking off, warmup discarded. Both arms at `--parallel 1`. Baseline 76.3 tok/s; with `--spec-type draft-mtp --spec-draft-n-max 4` (ungated, no p-min) 171.7 tok/s (+125%). Acceptance 0.69-0.87 (avg 0.69). N-max 6 gated (p-min 0.75) reached 154.5 tok/s (0.77-0.87 acceptance) — ungated is faster, gated is the safer daily bet.
 
 ### A6000 48GB: n-max sweep
 
