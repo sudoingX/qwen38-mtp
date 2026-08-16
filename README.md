@@ -92,7 +92,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | 2x RX 9070 16GB (Vulkan) | 22.1 | 41.6 | 2 | 0.73 | [@tomertec](https://github.com/tomertec) |
 | AMD Radeon AI PRO R9700 32GB | 27.0 | 43.3 | 2 | 0.60-0.94 | [@ajnytebot](https://github.com/ajnytebot) |
 | Ryzen AI Max+ 395 / Radeon 8060S | 11.5 | 23.7 | 2 | 0.52-0.94 | [@shiwuxiu](https://github.com/shiwuxiu) |
-| RTX 5090 32GB (desktop) | 69.3 | 132.7 | 4 | 0.51 | [@paulomcg](https://github.com/paulomcg) |
+| RTX 5090 32GB (desktop) | 69.3 | 129.1 | 4 | 0.55 | [@paulomcg](https://github.com/paulomcg) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -156,41 +156,41 @@ Method note, since it is not the repo's: numbers come from a local greedy stream
 
 ### RTX 5090 32GB (desktop): the p-min gate is inverted here too
 
-Ran the gate A/B at n-max 4 on the deployed config (224K, q8_0 KV, two slots).
-`probe.py` medians of three runs x three prompts, thinking off, only the p-min
-flag varying:
+Gate A/B at n-max 4. All three arms at 192K, q8_0 KV, `--parallel 1` — only the
+spec flags vary, so these are directly comparable to the row's baseline.
+`probe.py` medians of three runs x three prompts, thinking off:
 
-| config | Overall mean | Overall median | P1 code (py) | P2 prose (mmap) | Acceptance |
+| config | Overall median | Overall mean | P1 code (py) | P2 prose (mmap) | Acceptance |
 |---|---|---|---|---|---|
-| n-max 4, `--spec-draft-p-min 0.60` | 127.3 | 126.9 | 151.8 | 99.3 | 0.75 |
-| **n-max 4, ungated** | **132.7** | 126.7 | **167.8** | 100.3 | 0.51 |
-| n-max 6, ungated | 114.6 | 113.0 | 157.4 | 79.3 | 0.46 |
+| spec off | 69.3 | 69.3 | 69.3 | 69.2 | — |
+| n-max 4, `--spec-draft-p-min 0.60` | 123.9 | 125.4 | 150.7 | 98.0 | 0.73 |
+| **n-max 4, ungated** | **129.1** | 131.6 | 157.4 | 109.1 | 0.55 |
 
-Ungated wins by 4.2% on the mean and 10.5% on the code prompt; prose and the
-overall median are flat. Smaller than the 26% loss @taco-devs measured in the
-0.60-0.70 band, but the same direction — and @jcr211's NVFP4 rig lands the same
-way, with gated n-max 4 (103.9) losing to ungated n-max 3 (108.7).
+Ungated wins on every prompt: +4.2% overall median, +4.4% on code, +11.3% on
+prose. Smaller than the 26% loss @taco-devs measured in the 0.60-0.70 band, but
+the same direction — and @jcr211's NVFP4 rig lands the same way, with gated
+n-max 4 (103.9) below ungated n-max 3 (108.7).
 
-That is three independent RTX 5090s where **rule 2 inverts**. The gate helps the
-bandwidth-starved cards it was found on and costs throughput on cards where
-verification is close to free. Worth treating as card-class-dependent rather
-than a universal default.
+That is three independent RTX 5090s, on three different quants, where **rule 2
+inverts**. The gate helps the bandwidth-starved cards it was found on; where
+verification is close to free it converts skipped drafts into plain decode
+rounds. Worth treating as card-class-dependent rather than a default.
 
-**Acceptance is a vanity metric on this class of card.** Gating raised it from
-0.51 to 0.75 while throughput went *down*. Tuning for acceptance picks the
+**Acceptance is a vanity metric on this class of card.** Gating moved it from
+0.55 to 0.73 while throughput went *down*. Tuning for acceptance picks the
 slower configuration.
 
-Depth optimum here is 4 ungated; 6 is clearly worse, with prose collapsing from
+Depth optimum here is 4. A separate ungated sweep at 224K with two slots put
+n-max 6 at 113.0 median against 126.7 for n-max 4, with prose collapsing from
 100.3 to 79.3.
 
 **A `--parallel` warning worth its own line.** The README says `--parallel 1` is
 required, and it is — but the cost of getting it wrong is not just an
-unsupported config, it is a corrupted baseline. This box ran `--parallel 2`
-before the sweep and measured 55.4 tok/s unassisted. At `--parallel 1`, same
-everything else, the unassisted number is 69.3. **`--parallel 2` alone costs
-~20% of single-stream decode.** Pairing an MTP arm against a `--parallel 2`
-baseline reads as +124% when the honest figure is +93%. Measure both arms at
-`--parallel 1`.
+unsupported config, it is a corrupted baseline. This box measured 55.4 tok/s
+unassisted at `--parallel 2`; at `--parallel 1`, same everything else, it is
+69.3. **`--parallel 2` alone costs ~20% of single-stream decode.** Pairing an
+MTP arm against a `--parallel 2` baseline reads as +133% when the honest figure
+is +86%. Measure both arms at `--parallel 1`.
 
 ### AMD Radeon AI PRO R9700 32GB: n-max 2 versus 4
 
