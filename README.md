@@ -112,6 +112,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | 2× RTX 5060 Ti 16GB (TP, `-sm tensor`) | 37.1 | 65.9 | 2 | 0.51-0.88 | [@Jackwwg83](https://github.com/Jackwwg83) |
 | RTX 5090 32GB (desktop) | 62.7 | **108.7** | 3 | 0.72 | [@jcr211](https://github.com/jcr211) |
 | RTX 5090 32GB (desktop) | 69.3 | 129.1 | 4 | 0.55 | [@paulomcg](https://github.com/paulomcg) |
+| 2× Tesla P40 24GB (UD-Q4_K_XL, 262K, q4_0 KV) | 13.2 | 23.4 | 4 | 0.82 | [@lyesrock](https://github.com/lyesrock) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -136,6 +137,7 @@ Ran the A/B on your card? Open a PR and add a row.
 \* RTX 5090 desktop row: unsloth Qwen3.8 Dynamic NVFP4 (FP8-as-Q8 unified-mtp), 163,840 context, q8_0 KV cache, llama.cpp b10430, Windows/CUDA, driver 610.88 — first NVFP4 quant in the table. Full n-max sweep: 2 → 98.4, **3 → 108.7 (+73%)**, 4 + p-min 0.60 → 103.9, 8 → 92.6 — deep-draft optimum consistent with the A6000 48GB pattern; n-max 8 confirmed worst spec setting. Method: unchanged `probe.py`, three runs x three prompts, thinking at template default (xhigh). Acceptance 0.721 aggregate (1845/2558 from server logs).
 \* RTX 5090 32GB row: unsloth UD-Q4_K_XL, **192K context**, q8_0 KV cache, mmproj loaded (vision, `--image-min-tokens 1024`), llama-swap `unified-cuda-2026-08-14`, Linux/CUDA — 26.5 GB VRAM baseline, 28.5 GB with spec. **Ungated** — see the p-min A/B below. Both arms at `--parallel 1` so only the spec flags differ. Method: stock `probe.py`, medians of three runs x three prompts, thinking off. n-max sweep at p-min 0.60 below.
 \* RTX 3090 turboquant row: unsloth Q4_K_M, 131K context, q4_0 KV cache, custom turboquant llama.cpp at commit `95b18c0`, NVIDIA driver 610.43.03, `--parallel 1`, all layers on GPU, thinking off. Method: unchanged `probe.py`, medians of three runs x three prompts, same setup both arms. MTP at n-max 6 with p-min 0.75.
+\* 2× Tesla P40 UD-Q4_K_XL 262K q4_0 KV row: unsloth UD-Q4_K_XL, 262K context, q4_0 KV cache (both K and V), llama.cpp b10453 (`3cb7ffb1a`), Linux/CUDA, `--tensor-split 1,1` (no NVLink), `--parallel 1`. Method: unchanged `probe.py`, three runs x three prompts, thinking off, warmup discarded. Baseline 13.2 tok/s; with `--spec-type draft-mtp --spec-draft-n-max 4 --spec-draft-p-min 0.75` 23.4 tok/s (+77%). Acceptance 0.82 avg. N-max 4 ungated reached 23.6 tok/s (0.68 acceptance) — only +0.8% faster (noise) with much lower acceptance; gated is the clear winner on bandwidth-starved Pascal. N-max 6 gated: 22.5 tok/s (0.80 acceptance) — n-max 4 is the sweet spot. KV f16 was within 2% of q4_0 on all arms (13.4 / 23.6 / 22.4 / 22.6) — the q4_0 KV is a fit choice (262K ctx on 2×24GB), not a speed choice.
 
 ### A6000 48GB: n-max sweep
 
