@@ -112,7 +112,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | 2× RTX 5060 Ti 16GB (TP, `-sm tensor`) | 37.1 | 65.9 | 2 | 0.51-0.88 | [@Jackwwg83](https://github.com/Jackwwg83) |
 | RTX 5090 32GB (desktop) | 62.7 | **108.7** | 3 | 0.72 | [@jcr211](https://github.com/jcr211) |
 | RTX 5090 32GB (desktop) | 69.3 | 129.1 | 4 | 0.55 | [@paulomcg](https://github.com/paulomcg) |
-| RX 7900 XTX 24GB (Vulkan/RADV) | 28.8 | 57.9 | 2 | 0.51-0.95 | [@Splizard](https://github.com/Splizard) |
+| RX 7900 XTX 24GB (Vulkan/RADV) | 28.8 | 70.7 | 3 | 0.43-0.95 | [@Splizard](https://github.com/Splizard) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -137,7 +137,7 @@ Ran the A/B on your card? Open a PR and add a row.
 \* RTX 5090 desktop row: unsloth Qwen3.8 Dynamic NVFP4 (FP8-as-Q8 unified-mtp), 163,840 context, q8_0 KV cache, llama.cpp b10430, Windows/CUDA, driver 610.88 — first NVFP4 quant in the table. Full n-max sweep: 2 → 98.4, **3 → 108.7 (+73%)**, 4 + p-min 0.60 → 103.9, 8 → 92.6 — deep-draft optimum consistent with the A6000 48GB pattern; n-max 8 confirmed worst spec setting. Method: unchanged `probe.py`, three runs x three prompts, thinking at template default (xhigh). Acceptance 0.721 aggregate (1845/2558 from server logs).
 \* RTX 5090 32GB row: unsloth UD-Q4_K_XL, **192K context**, q8_0 KV cache, mmproj loaded (vision, `--image-min-tokens 1024`), llama-swap `unified-cuda-2026-08-14`, Linux/CUDA — 26.5 GB VRAM baseline, 28.5 GB with spec. **Ungated** — see the p-min A/B below. Both arms at `--parallel 1` so only the spec flags differ. Method: stock `probe.py`, medians of three runs x three prompts, thinking off. n-max sweep at p-min 0.60 below.
 \* RTX 3090 turboquant row: unsloth Q4_K_M, 131K context, q4_0 KV cache, custom turboquant llama.cpp at commit `95b18c0`, NVIDIA driver 610.43.03, `--parallel 1`, all layers on GPU, thinking off. Method: unchanged `probe.py`, medians of three runs x three prompts, same setup both arms. MTP at n-max 6 with p-min 0.75.
-\* RX 7900 XTX Vulkan row: unsloth Q4_K_M, 131K context, q4_0 KV cache, llama.cpp master `4695f00` (2026-08-17), Vulkan backend (RADV, Mesa 26.1.5) on Void Linux musl, kernel 7.0.14, ReBAR enabled, Ryzen 9 5900XT host — no ROCm installed; this is mainline Mesa only. 0.6 GB VRAM before serve, 18.6 GB serving baseline, 19.9 GB with spec. Method: unchanged `probe.py` at `dc18736`, three runs x three prompts, thinking off, both arms `--parallel 1`. Aggregate acceptance 0.80 (1652/2055 from server `draft acceptance` lines); the range's 0.51-0.60 end is the prose prompt. Relative to the earlier XTX row: this baseline reads lower (28.8 vs 30.7) while the flag arm reads far higher (57.9 vs 43.9, +101% vs +43%) — different backend and a 2026-08-17 build (see rule 6); the deltas are the durable part.
+\* RX 7900 XTX Vulkan row: unsloth Q4_K_M, 131K context, q4_0 KV cache, llama.cpp master `4695f00` (2026-08-17), Vulkan backend (RADV, Mesa 26.1.5) on Void Linux musl, kernel 7.0.14, ReBAR enabled, Ryzen 9 5900XT host — no ROCm installed; this is mainline Mesa only. 0.6 GB VRAM before serve, 18.6 GB serving baseline, 19.9 GB with spec. Method: unchanged `probe.py` at `dc18736`, three runs x three prompts, thinking off, both arms `--parallel 1`. Row is the n-max 3 arm (aggregate acceptance 0.72); n-max 2 on the same config measured 57.9 at 0.80 aggregate (1652/2055), the range's low end is the prose prompt in both arms. Full sweep and gate A/B in the section below. Relative to the earlier XTX row: this baseline reads lower (28.8 vs 30.7) while the flag arms read far higher — different backend and a 2026-08-17 build (see rule 6); the deltas are the durable part.
 
 ### A6000 48GB: n-max sweep
 
@@ -404,9 +404,21 @@ unassisted at `--parallel 2`; at `--parallel 1`, same everything else, it is
 MTP arm against a `--parallel 2` baseline reads as +133% when the honest figure
 is +86%. Measure both arms at `--parallel 1`.
 
-### RX 7900 XTX (Vulkan): the desktop tax, and flag stacks don't travel either
+### RX 7900 XTX (Vulkan): n-max sweep, gate A/B, the desktop tax, and flag stacks don't travel
 
-Two screens from the same card before the clean A/B above, both from a custom streaming harness (not `probe.py`), labeled as screens per the contributing rules:
+Same card, same config as the row, unchanged `probe.py`, medians of three runs x three prompts. Acceptance from server logs (per-request range, aggregate in parentheses):
+
+| n-max | Overall median | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Acceptance |
+|---|---|---|---|---|---|
+| off | 28.8 | 28.6 | 28.8 | 28.9 | — |
+| 2 | 57.9 | 61.8 | 47.2 | 57.9 | 0.51-0.95 (0.80) |
+| **3** | **70.7** | 78.8 | **50.4** | **70.7** | 0.43-0.95 (0.72) |
+| 4 | 70.2 | **86.3** | 49.7 | 70.2 | 0.32-1.00 (0.63) |
+| 4, `p-min 0.60` | 60.7 | 79.9 | 39.6 | 60.7 | 0.53-0.94 (0.78) |
+
+Same shape as every sweep above: code climbs through n-max 4, prose peaks at 3, acceptance decays monotonically. Overall optimum is 3 (+145% over spec-off, +22% over the launch-command n-max 2), with 4 a statistical tie on the strength of code alone — daily mixed use 3, pure code 4, prose-heavy 2. And rule 2 inverts here exactly as on the three desktop 5090s: the 0.60 gate raised aggregate acceptance from 0.63 to 0.78 while dropping the overall median 13% and prose by 20%. Vulkan verification on this card is cheap enough that every draft is worth attempting — another card class where acceptance is a vanity metric.
+
+Two further screens from the same card, both from a custom streaming harness (not `probe.py`), labeled as screens per the contributing rules:
 
 - **A shared desktop halves everything, silently.** Serving IQ4_XS at 16K next to a live compositor and browser holding 7.3 GB, 3.5 GB of weights spilled to GTT (host RAM over PCIe) and decode read 16.8 baseline / 21.4-29.7 with n-max 2 — prompt processing fell from ~740 to ~60-200 tok/s. The server starts fine and `/health` is green; nothing tells you the weights aren't resident. Check `mem_info_gtt_used` (or your vendor's equivalent) before trusting any number measured on a desk machine.
 - **Rule 1 extends to whole flag stacks.** Importing the Strix Halo config from the issues verbatim (`draft-mtp,ngram-mod --spec-draft-n-max 12 --spec-ngram-mod-n-min 24`) measured 7.7 tok/s on prose — *below the unassisted baseline* — and 17.5 on code, against 21.4/29.7 for plain n-max 2 on the same degraded setup. Deep drafts plus ngram chaining that pay on a bandwidth-starved 256-bit APU invert on a 960 GB/s card. Re-derive the stack on your own hardware class, not just n-max.
