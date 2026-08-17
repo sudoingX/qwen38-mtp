@@ -148,6 +148,78 @@ Ran the A/B on your card? Open a PR and add a row.
 
 Every contributor sweep and study is in [sweeps/](sweeps/), grouped by card family and PR-able like the table: [RTX 5090](sweeps/rtx-5090.md) · [RTX 3090](sweeps/rtx-3090.md) · [Radeon](sweeps/radeon.md) · [APUs and iGPUs](sweeps/apu-igpu.md) · [Multi-GPU](sweeps/multi-gpu.md) · [Workstation](sweeps/workstation.md)
 
+### RTX 3090 24GB: DSpark against the built in MTP head
+
+Same card as the two rows above. Unsloth quants, memory +1200, core +180,
+430 W, llama.cpp master `666f889`, unmodified `probe.py`, `--parallel 1`,
+medians of three passes.
+
+A trained DSpark head for this model now exists.
+[`DimInfer/Qwen3.8-27B-Dspark-v1`](https://huggingface.co/DimInfer/Qwen3.8-27B-Dspark-v1)
+learns from hidden states taken from the served Q4_K_M file rather than bf16.
+It publishes 1.69x to 2.51x on a 4090D, including 2.14x on `UD-Q4_K_XL`.
+
+Measured here on `UD-Q4_K_XL` at 8K context with no mmproj, against the same
+target's own MTP head:
+
+| arm | code (py) | prose | bash | overall | vs spec off |
+|---|---:|---:|---:|---:|---:|
+| spec off | 44.2 | 44.3 | 44.1 | **44.2** | |
+| **`draft-mtp` n=2** | 86.5 | **63.1** | **76.0** | **76.0** | **1.72x** |
+| `draft-dspark` n=3 | 91.6 | 55.5 | 71.5 | 71.5 | 1.62x |
+| `draft-dspark` n=4 | 95.0 | 47.4 | 68.5 | 68.5 | 1.55x |
+| `draft-dspark` n=5 | **97.5** | 47.4 | 67.3 | 67.3 | 1.52x |
+
+Their 2.14x is not wrong. It is a different workload. Their nine sets are
+mostly math500 and gsm8k, where they report 2.5x, and their card says
+structured reasoning speculates best and open ended writing worst. On these
+three prompts the split is sharp. DSpark wins on code by 13% (97.5 against
+86.5). It loses on prose by 25% (47.4 against 63.1). Pick DSpark if your
+traffic is math or long reasoning. Keep the built in head for mixed or prose
+heavy traffic, where it wins and costs no VRAM.
+
+Two practical notes. The draft needs 2 GB, so `UD-Q4_K_XL` plus DSpark plus
+mmproj plus 32K context does not fit 24 GB. It aborts during memory fitting
+with `dflash requires ctx_other to be set`. Use `-c 8192` and no mmproj.
+Deeper drafting also loses overall even though code keeps climbing to n_max
+5, the same shape every sweep in this README shows.
+
+### Three findings from the same card
+
+**Rule 6 paid nothing here, for a reason worth checking first.** Moving from a
+2026-08-14 source snapshot to master `666f889`, 35 commits later, same config:
+spec off 52.4 to 52.6, MTP n=2 85.6 to 83.8. Both inside noise. The 10% to
+15% others gained comes from leaving a launch week binary that lacked the
+`ssm_scan` state rollback. A build that already has that commit has nothing
+left to collect. Check what your build contains before you budget time.
+
+**`-fa 1` is already on, and VRAM proves it, not speed.** `--flash-attn`
+defaults to `auto`, and auto resolves to on for this path. Base and `-fa on`
+both load 16338 and 16340 MiB. `-fa off` loads 23782 MiB, which is 7.4 GB
+more. Adding the flag measures noise.
+
+**`--spec-type draft-mtp,ngram-mod` crashes the server.** It aborts after
+three requests with `CUDA error: an internal operation failed` at
+`ggml-cuda.cu:106`, inside `ggml_cuda_mul_mat_cublas`, reached through
+`ggml_cuda_graph_evaluate_and_capture`. It reproduces on master `666f889`.
+Setting `GGML_CUDA_DISABLE_GRAPHS=1` does not prevent it: the server then
+serves five requests instead of three and aborts with the same error.
+The GMK EVO-X2 row calls this pairing unstable. Here
+it is a crash. `ngram-cache` and `ngram-map-k` both run clean and both lose,
+81.9 and 81.3 against 90.9 for MTP alone.
+
+The same run shows the warm repeat effect that row warns about, because
+`probe.py` sends each prompt three times. With ngram-mod the code passes read
+111.1 cold, then 124.4 and 122.5 warm, against 112.7 for MTP alone.
+
+**One measurement warning.** A llama-server that is killed but not reaped keeps
+answering `/health`. The next arm in a sweep then fails to bind the port, dies
+at once, and its health check is answered by the old server. That produced
+three identical looking rows here before it was caught. The tell was a VRAM
+figure that did not change between arms that should have differed. A sweep
+script should refuse to start when the port is bound, and should confirm that
+the process owning the port is its own.
+
 ## License
 
 Apache-2.0. The numbers and verdicts are real, the conclusions are mine.
