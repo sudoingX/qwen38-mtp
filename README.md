@@ -106,7 +106,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | RX 7900 XTX 24GB (Vulkan/RADV) | 28.8 | 70.7 | 3 | 0.43-0.95 | [@Splizard](https://github.com/Splizard) |
 | RTX 3090 24GB (UD-Q2_K_XL, OC) | 52.4 | 85.6 | 2 | 0.76 | [@dcrey7](https://github.com/dcrey7) |
 | RTX 3090 24GB (UD-Q4_K_XL, OC) | 43.9 | 79.6 | 2 | 0.78 | [@dcrey7](https://github.com/dcrey7) |
-| RTX 5060 Laptop 8GB | 4.2 | 7.3 | 2 | 0.75-0.97 (0.90 aggregate) | [@ENY66](https://x.com/ENY66) |
+| RTX 5060 Laptop 8GB | 4.2 | 7.3 | 2 | 0.75-0.97 (0.90 aggregate) | [@ENY66n](https://x.com/ENY66n) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
