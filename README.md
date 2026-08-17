@@ -112,7 +112,11 @@ Ran the A/B on your card? Open a PR and add a row.
 | 2× RTX 5060 Ti 16GB (TP, `-sm tensor`) | 37.1 | 65.9 | 2 | 0.51-0.88 | [@Jackwwg83](https://github.com/Jackwwg83) |
 | RTX 5090 32GB (desktop) | 62.7 | **108.7** | 3 | 0.72 | [@jcr211](https://github.com/jcr211) |
 | RTX 5090 32GB (desktop) | 69.3 | 129.1 | 4 | 0.55 | [@paulomcg](https://github.com/paulomcg) |
+| RTX 3090 24GB (UD-Q2_K_XL, OC) | 52.4 | 85.6 | 2 | 0.76 | [@dcrey7](https://github.com/dcrey7) |
+| RTX 3090 24GB (UD-Q4_K_XL, OC) | 43.9 | 79.6 | 2 | 0.78 | [@dcrey7](https://github.com/dcrey7) |
 
+\* RTX 3090 UD-Q2_K_XL row: unsloth UD-Q2_K_XL (10.7 GB), 32K context, f16 KV cache, llama.cpp master source snapshot of 2026-08-14 (built from archive, so no commit hash; it contains the `ssm_scan` state-rollback that makes deep MTP drafts work on the DeltaNet layers), CUDA 13 self-built, CachyOS/Linux, driver 610.43.03. VRAM 13.9 GB baseline, 14.7 GB with spec. **The card is overclocked**: memory +1200, core +180, power limit 430 W against a 390 W default. Method: unmodified `probe.py` at `a4c3028da1`, three full passes per arm, the table shows the median of the three pass medians; passes were 52.5/52.4/52.3 and 85.6/85.1/87.2. Both arms `--parallel 1`, thinking off.
+\* RTX 3090 UD-Q4_K_XL row: same machine, same build, same method, same overclock; unsloth UD-Q4_K_XL (17.9 GB), 32K context, f16 KV. VRAM 20.5 GB baseline, 21.4 GB with spec. Passes were 43.9/43.9/43.9 and 79.8/79.6/78.2. This row is the one to compare against the other 3090 rows, since those use ~17 GB Q4 files; the UD-Q2_K_XL row above is faster mainly because it reads 38% fewer weight bytes per token, not because of the overclock. See the section below.
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
 \* 3×24GB TP row: two RTX 3090 + one 3090 Ti, Unsloth UD-Q6_K_XL, tensor-parallel `--split-mode tensor`, `--parallel 4`, 500K unified KV pool, q8_0 KV, f16 draft KV, mmproj Q8, temp 1.0. VRAM ~16.6 GB/GPU baseline, ~18.7 GB/GPU with spec (tightest card). Method: stock `probe.py`. `--parallel 1` was not required on this host.
@@ -401,6 +405,58 @@ unassisted at `--parallel 2`; at `--parallel 1`, same everything else, it is
 69.3. **`--parallel 2` alone costs ~20% of single-stream decode.** Pairing an
 MTP arm against a `--parallel 2` baseline reads as +133% when the honest figure
 is +86%. Measure both arms at `--parallel 1`.
+
+### RTX 3090 24GB: two quants on one card, and two things that do nothing
+
+Both rows above are the same machine, same build, same afternoon, so the pair
+isolates the quant. The overclock (memory +1200, core +180, 430 W) is on for
+every number here.
+
+| quant | size | baseline | MTP n=2 | gain | acceptance |
+|---|---:|---:|---:|---:|---:|
+| unsloth UD-Q2_K_XL | 10.7 GB | 52.4 | 85.6 | +63% | 0.76 |
+| unsloth UD-Q4_K_XL | 17.9 GB | 43.9 | 79.6 | +81% | 0.78 |
+
+**The quant moves the baseline more than the flag choice does.** Going from the
+17.9 GB file to the 10.7 GB one lifts the unassisted floor 43.9 -> 52.4, which
+is most of the distance between this card and the other 3090 rows here. Worth
+knowing before comparing baselines across rows: a row's quant size sets its
+floor, so `Q4_K_M` rows and `UD-Q2_K_XL` rows are not measuring the same thing.
+
+**The overclock is worth about +6.5%, not more.** On the matched Q4 file this
+card baselines 43.9 against 41.3 on @hauntedhost's stock b10450 3090. I mention
+the size because I nearly reported the overclock as a +27% effect by comparing
+my Q2 baseline to their Q4 baseline, which is not a like-for-like comparison.
+
+**`-fa 1` is already on, so adding it changes nothing.** `--flash-attn`
+defaults to `auto` and auto resolves to on for this path. The proof is VRAM,
+not speed: baseline and `-fa on` load 16338 and 16340 MiB, while `-fa off`
+loads 23782 MiB, 7.4 GB more, because the unfused path materialises the
+attention buffers. Anyone adding the flag expecting a gain will measure noise.
+
+**`--spec-type draft-mtp,ngram-mod` segfaults here.** It dies mid-generation in
+`server_context_impl::update_slots()`, reproducibly, on the third prompt. The
+GMK EVO-X2 row calls that combination unstable; on this box it is a crash. The
+same run also shows the repetition artifact that row warns about: with
+ngram-mod the code prompt's three passes were 111.1 cold, then 124.4 and 122.5
+warm, against 112.7 for MTP alone. `probe.py` sends each prompt three times, so
+n-gram scores its own cache on runs two and three. `ngram-cache` and
+`ngram-map-k` both ran clean and both lost (81.9 and 81.3 overall against 90.9
+for MTP alone at n-max 4).
+
+**Nothing else moved it.** Tested and rejected on this card, all against a
+90 +/- 1 overall baseline at n-max 4: depths 3, 5 and 6; p-min 0.0 and 0.4;
+KV cache q8_0 and q4_0; draft-model KV q8_0 (best code number of anything I
+ran, 117.5, but worse overall); ubatch 256 and 1024. Power sweep from 250 W to
+480 W: 390 W and 430 W are within noise of each other overall, 480 W is +6%,
+and efficiency peaks around 300 W.
+
+**A note on your overall column.** It is the median of nine runs, which on this
+rig lands on the bash prompt, and that prompt moves about ±8 tok/s between
+otherwise identical passes. I had a prose figure shift 5 tok/s and an
+acceptance figure shift 0.04 between single passes, enough to reverse a
+conclusion I had already written down. Every number in my rows is the median of
+three complete probe passes rather than one.
 
 ## License
 
