@@ -3,7 +3,7 @@
 Contributor-authored deep dives for Qwen3.8-27B MTP on Apple Silicon / Metal. Add yours via a PR to this file, row and footnote go in the main [community table](../README.md#community-numbers).
 
 ### Apple M4 24GB (Metal): the flag is a code-for-prose trade, not a speedup
-*by [@sternryan](https://github.com/sternryan), PR #TBD*
+*by [@sternryan](https://github.com/sternryan), PR #40*
 
 First Apple row in the table, and the first one that does not move the overall number. M4 (base, 10-core GPU, ~120 GB/s), 24GB unified memory, macOS 15, llama.cpp b10450 (`ece963f41`, Homebrew bottle). unsloth UD-Q3_K_XL, 32K context, q4_0 KV, `--parallel 1`, `-b 512 -ub 512`, thinking off. Unmodified `probe.py` at `a4c3028da1`.
 
@@ -54,7 +54,7 @@ If you are on a 24GB Apple machine, this flag is not a speedup. It is roughly fr
 
 
 ### The same model on two backends: a matched CUDA control
-*by [@sternryan](https://github.com/sternryan), PR #TBD*
+*by [@sternryan](https://github.com/sternryan), PR #40*
 
 Why the row above nets to zero, and how to check that it is real.
 
@@ -74,7 +74,7 @@ On CUDA every prompt type gains, prose included (+30-34%). On Metal prose invert
 The 3090 baseline is deliberately checkable: 43.2-43.8 against [@hauntedhost](https://github.com/hauntedhost)'s 41.3 on the same b10450 and [@dcrey7](https://github.com/dcrey7)'s 43.9 overclocked. If this rig measures 3090s the way the rest of the table does, the Apple number is not a harness artifact — and anyone with a 3090 can check that half directly.
 
 ### Metal small-batch decode does not amortize
-*by [@sternryan](https://github.com/sternryan), PR #TBD*
+*by [@sternryan](https://github.com/sternryan), PR #40*
 
 Where the difference in the control above comes from, and the part that may generalize past Apple.
 
@@ -104,7 +104,7 @@ Two code paths are worth a look for anyone who wants to chase it, both still in 
 If it generalizes, the rule is **check that your backend amortizes a small decode batch before tuning spec flags at all** — where batch 2-8 decode costs close to linear, no n-max or p-min value can recover it, and acceptance will look healthy the whole time you are losing. The CUDA column above is the counter-example that makes the flag pay everywhere else in this table. I have only two backends and one Apple device, so this is offered as a hypothesis for the rules list, not a finding.
 
 ### Open threads on Apple Silicon
-*by [@sternryan](https://github.com/sternryan), PR #TBD*
+*by [@sternryan](https://github.com/sternryan), PR #40*
 
 Posting these so nobody duplicates the work, and because two of them need hardware I do not have. Happy to hand any of it off.
 
