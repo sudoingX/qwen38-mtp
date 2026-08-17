@@ -51,3 +51,18 @@ and marginal on one.
 
 Daily mixed use: 4 is the safe pick (top-2 in both runs). n-max 6 fell away in the run that tested it.
 
+
+### Mac Studio (M3 Ultra, 96GB UMA, Metal): shallow and ungated wins
+*by [@adityavsingh](https://x.com/adityavsingh)*
+
+Mac Studio with Apple M3 Ultra and 96 GB unified memory, macOS/Metal, unsloth Q6_K (21 GB file), 131K context, Flash Attention, q4_0 K/V main and draft KV caches, and `--parallel 1`. LM Studio's bundled llama.cpp Metal backend 2.29.0 reports `version: 1 (dd1ea52)`. The upstream `probe.py` was unchanged: warmup discarded, three runs per prompt, thinking off, with Qwen3.8 as the only resident model. Overall is the probe's overall median; acceptance is taken from server logs excluding warmup.
+
+| Config | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Acceptance |
+|---|---:|---:|---:|---:|---|
+| spec off | 22.8 | 23.0 | **22.9** | 22.6 | — |
+| **MTP n-max 2, ungated** | **24.2** | 26.4 | 20.2 | **24.2** | 0.53-0.95 (79.8% aggregate) |
+| MTP n-max 2, p-min 0.60 | 19.9 | **27.0** | 16.1 | 19.9 | 0.66-0.97 (86.9% aggregate) |
+| MTP n-max 3, ungated | 20.7 | 23.6 | 14.3 | 20.7 | 0.41-0.94 (71.9% aggregate) |
+| MTP n-max 4, ungated | 18.1 | 21.8 | 11.5 | 18.1 | 0.33-0.93 (65.1% aggregate) |
+
+N-max 2 is the mixed-workload setting here: 22.8 → 24.2 tok/s (+6.1%). It improves both code prompts while the prose prompt regresses 11.8%, so the modest overall gain should not be read as a universal speedup. Deeper drafts lose rapidly, and the 0.60 gate is a useful counterexample to treating acceptance as the goal: it raises aggregate acceptance from 79.8% to 86.9% but lowers overall throughput from 24.2 to 19.9 tok/s. On this Q6/Metal configuration, keep the shallow, ungated setting for throughput; do not copy the deep or gated stacks from bandwidth-starved APUs.
