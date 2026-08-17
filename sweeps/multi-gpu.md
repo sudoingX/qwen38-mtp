@@ -163,3 +163,19 @@ A separate production-layout follow-up loaded the BF16 vision projector and used
 
 One Windows-specific memory result: `--load-mode none` reduced physical RAM added after load from 16.33 GiB to 1.85 GiB versus default `auto`/mmap. The same two 1,200-token outputs remained byte-identical, with effectively unchanged decode (63.18/83.58 versus 63.06/83.95 tok/s). Executable worker gates also passed literal CRUD (5/5), deterministic scoring (5/5), and structured-agent JSON validation. These are supplemental production checks, not part of the main-table paired A/B.
 
+### RTX 5080 16GB + RTX 3090 24GB (tensor split): mixed Blackwell + Ampere
+*by [@plyra](https://x.com/plyra)*
+
+Same host, same GGUF, same serve config — only the spec flags change. Stock `probe.py`, medians of three runs x three prompts, thinking off. Acceptance from the server `draft acceptance` lines (warmup excluded).
+
+| spec | Overall median | Overall mean | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Acceptance |
+|---|---:|---:|---:|---:|---:|---|
+| off | 55.6 | 54.9 | 55.7 | 54.0 | 55.8 | — |
+| n-max 2, ungated | **92.9** | 91.4 | 105.2 | 79.2 | 92.9 | 0.51-0.95 (agg ~0.79) |
+
+This is the first mixed-architecture row in the table (Blackwell 5080 + Ampere 3090, no NVLink). `--split-mode tensor` was set on both arms before any spec flag (rule 4). Weights + 131K q4_0 KV fit the pair with headroom: 12.0+10.3 GB baseline, 12.8+11.1 GB with spec.
+
+Code still climbs more than prose (105.2 vs 79.2), same shape as the other tensor-split hosts. n-max was not swept; 2 is the 24GB-class default from rule 1 and was left ungated because one of the two cards is Blackwell (rule 2).
+
+**Honest caveat:** the server logged `backend sampling not supported with SPLIT_MODE_TENSOR; using CPU sampler` on the MTP arm. The draft context still came up (`creating MTP draft context against the target model`) and the paired delta is +67%. A later n-max sweep, or a run once tensor-split GPU sampling lands, would be the right follow-up — this PR is the n-max 2 A/B only.
+
