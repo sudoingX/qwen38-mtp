@@ -8,3 +8,4 @@ Per-card-family deep dives, contributor-authored. The main [README](../README.md
 - [APUs and iGPUs](apu-igpu.md), 2 sections
 - [Multi-GPU rigs](multi-gpu.md), 5 sections
 - [Workstation cards](workstation.md), 2 sections
+- [Apple Silicon](apple-silicon.md), 4 sections
