@@ -105,3 +105,70 @@ throughput. Python reaches 149.9 tok/s at n-max 7, but that is only 1.7% above
 n-max 5 and comes with lower prose throughput, lower aggregate acceptance,
 and greater run-to-run variance.
 
+
+### Tesla V100 32GB (Volta): the optimum is shallow
+*by [@cameron](https://github.com/cameron)*
+
+First Volta row. One V100 32GB in a Dell R720, unsloth Q4_K_M, 4K context, f16
+KV, llama.cpp b10358 unless a table says otherwise, medians of three samples per
+prompt (five where noted), both arms at `--parallel 1`, only the spec flags
+changing within a pair.
+
+**n-max sweep**, 400 generated tokens:
+
+| n-max | Prose | Code | Acceptance |
+|---|---:|---:|---:|
+| off | 33.62 | 33.54 | — |
+| 1 | 46.53 | 46.41 | 0.87-0.89 |
+| **2** | **48.09** | **47.70** | 0.75 |
+| 3 | 43.90 | 45.49 | 0.62-0.65 |
+| 4 | 44.12 | 43.30 | 0.57-0.58 |
+| 6 | 33.97 | 36.03 | 0.43-0.47 |
+| 4, `--spec-draft-p-min 0.60` | 41.78 | 44.67 | 0.69-0.74 |
+
+Two departures from the other sweeps here. The code prompt peaks at n-max 2 with
+prose instead of climbing to 5-6, and the gate costs rather than rescues the
+deeper draft — the opposite of the P40 pair, which is older and slower. Volta
+verifies too slowly to carry a rejected draft: n-max 1 already holds 1.38x, and
+by n-max 6 the whole gain is gone.
+
+**Generated length**, n-max 2:
+
+| tokens | baseline prose / code | MTP prose / code | ratio | acceptance |
+|---:|---:|---:|---:|---:|
+| 128 | 34.19 / 34.13 | 46.62 / 48.66 | 1.36x / 1.43x | 0.69 / 0.79 |
+| 400 (n=5) | 33.61 / 33.04 | 47.92 / 48.08 | 1.43x / 1.46x | 0.75 |
+| 1,024 | 33.19 / 33.39 | 49.74 / 50.72 | 1.50x / 1.52x | 0.81 / 0.83 |
+
+**Prompt depth**, n-max 2. A 30,906-token prompt of real Markdown, not filler,
+which would inflate acceptance; 200 generated tokens, `cache_prompt` false:
+
+| spec | prefill | decode | ratio |
+|---|---:|---:|---:|
+| off | 52.5 s | 27.87 | 1.00x |
+| n-max 2 | 55.9 s | **45.60** | **1.64x** |
+
+Acceptance is 0.881 there against 0.747 at an 11-token prompt, and the head costs
+6.6% of prefill.
+
+**The b10358 build was worth 13 points, all of it on the MTP arm.** Same host,
+same requests, only the binary changing:
+
+| build | spec off | n-max 2 | ratio |
+|---|---:|---:|---:|
+| b9190 (`b64739ea`) | 33.07 | 42.35 | 1.28x |
+| b10358 (`030ebb55`) | 33.62 | 48.09 | 1.43x |
+
+The baseline moved 1.7% and the speculative arm 13.5%, so on this card rule 6 is
+about the draft path specifically.
+
+**Greedy agreement**, checked on both prompts: MTP held the baseline's exact
+token sequence on prose in all five samples, and diverged at generated token 70
+on code in all five, where the baseline wrote `get_median(filepath: str, field:
+str)` and the speculative stream wrote `get_median(filepath, field)`. Both are
+correct — a batched verification step can resolve a near tie differently — but a
+byte-identical greedy gate will see it.
+
+Sample spreads: 3.3% or less across the n-max sweep, except gated n-max 4 on code
+at 4.5%; 4.9% on the 1,024-token prose baseline and 3.5% or less on the rest of
+that series; 2.3% and 1.5% on the depth pair.
