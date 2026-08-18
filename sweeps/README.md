@@ -10,3 +10,4 @@ Per-card-family deep dives, contributor-authored. The main [README](../README.md
 - [Workstation cards](workstation.md), 2 sections
 - [Apple Silicon](apple-silicon.md), 5 sections
 - [CMP 170HX](cmp-170hx.md), 1 section
+- [RTX 5060 Ti](rtx-5060-ti.md), 1 section
