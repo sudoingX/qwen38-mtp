@@ -121,6 +121,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | Tesla V100 32GB (Volta) | 33.3 | 48.0 | 2 | 0.75 | [@cameron](https://github.com/cameron) |
 | RTX 5060 Ti 16GB (Q4-XYZ-v2, 32K) | 26.3 | 59.5 | 4 | 0.34-0.69 | [@jaisusx](https://github.com/jaisusx) |
 | RTX 5090 + RTX3080 (Q8_0, 131K, `-ts 26,6`) | 38.1 | 86.8 | 3 | 74.7 | [@lasq88](https://github.com/lasq88) |
+| Single RTX 5090 (Q4_K_M, 262K)| 75.4 | 153.8 | 4 | 86.5 | [@lasq88](https://github.com/lasq88) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
