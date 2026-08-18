@@ -3,7 +3,7 @@
 Contributor-authored deep dives for Qwen3.8-27B MTP on the RTX 5060 Ti 16GB (Blackwell SM 120).
 
 ### RTX 5060 Ti 16GB: the first single-card row — a Q4 file fits, and draft depth keeps paying
-*by [@jaisusx](https://github.com/jaisusx), PR #<n>*
+*by [@jaisusx](https://github.com/jaisusx), PR #52*
 
 The dual-5060-Ti rows in the main table established that unsloth's 16.68 GiB UD-Q4_K_XL does not
 fit one 16 GB card. This is the first single-RTX-5060-Ti row: it runs **quimmedes/Qwen3.8-27B-XYZ
@@ -61,7 +61,7 @@ llama-server `draft acceptance` log lines (range across the nine tasks).
   re-run on b10472. Per the build A/B above, the pattern transfers.
 
 ### Unsloth IQ4-family files on one 16 GB card: none of them serve MTP at speed
-*by [@jaisusx](https://github.com/jaisusx), PR #<n>*
+*by [@jaisusx](https://github.com/jaisusx), PR #52*
 
 The dual-card rows run unsloth files that cannot fit a single 5060 Ti. This section records what
 actually happens when you try to force unsloth's Q4-family onto one card. Per CONTRIBUTING this
