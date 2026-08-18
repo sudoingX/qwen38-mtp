@@ -115,6 +115,25 @@ What this section adds:
 - **The p-min knob is workload- and VRAM-dependent**, not just card-size-dependent: 0.60 won on the 2×9070 pool, 0.75 wins here.
 
 
+### RX 7900 XTX 24GB (Windows/Vulkan): first Windows XTX A/B
+*by [@pparuzel](https://github.com/pparuzel), PR #53*
+
+Single RX 7900 XTX 24GB on Windows 11, official `ggml.llamacpp` WinGet build 9553 (`9e3b928fd`, Clang 19.1.5) with the Vulkan backend — no ROCm installed; the AMD driver runs the iGPU too, but the serve is Vulkan0 (XTX) only. unsloth UD-Q4_K_XL, 131K context, q4_0 KV cache (K and V), flash attention on, `--parallel 1` all arms, thinking off, host Ryzen 7 9800X3D. Spec arms: `--spec-type draft-mtp` ungated (p-min 0.00), n-max 2, 3, and 4. Method: unchanged `probe.py` at `c7bc415`, three runs x three prompts, warmup discarded.
+
+| arm | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Overall median | Acceptance |
+|---|---|---|---|---|---|
+| spec-off | 40.9 | 41.1 | 40.8 | 41.0 | — |
+| n-max 2 | 83.6 | 65.4 | 76.9 | 76.9 | 0.55-0.95 (0.79) |
+| **n-max 3** | **97.9** | 63.6 | **85.4** | **85.4** | 0.47-0.90 (0.73) |
+| n-max 4 | 89.8 | 45.1 | 70.8 | 70.8 | 0.33-0.91 (0.61) |
+
+**Optimum at n-max 3: +108% overall (median)** against +88% at n-max 2, the same shape as the RADV XTX below — code keeps climbing (97.9, 0.90 aggregate acceptance) while prose speed sits flat and its acceptance collapses (0.48 aggregate at n-max 3). n-max 4 is past the optimum: +73% overall, prose drops to 45.1 tok/s on 0.33 aggregate acceptance (0.87 code / 0.34 prose / 0.64 bash), the first arm where an extra draft slot costs more than it returns. The spec-off arm was back-filled on the same serve with only the spec flags removed, everything else identical. The n-max 2 arm is the contributor's original run, re-run once to supply acceptance and reproduced within session noise (82.2 / 67.1 / 73.9, overall median 68.3, mean 72.7): aggregate 0.79 (1681/2130 draft tokens, warmup excluded), per-request range 0.55–0.95, code 0.94 / prose 0.60 / bash 0.74. n-max 3 aggregate 0.73 (1740/2369), per-prompt code 0.90 / prose 0.48 / bash 0.75. n-max 4 aggregate 0.61 (1709/2791). Prose carries the low end in every spec arm, exactly as on the RADV XTX.
+
+VRAM (Windows GPU perf counter): 24,560 MiB card with 811 MiB in use before serve (i.e. a clean desktop, not a rule-7 case); 19.9 GiB dedicated baseline, 20.9 GiB at n-max 2, 21.1 GiB at n-max 3, 21.2 GiB at n-max 4; the MTP draft context is ~712 MiB.
+
+Cross-check against the Linux/RADV XTX row above (28.8 → 70.7 at n-max 3, Q4_K_M): this Windows/Vulkan baseline reads far higher (41.0 vs 28.8) and its n-max 3 arm lands above that row's on absolute with-flag numbers. Quant (UD-Q4_K_XL vs Q4_K_M) and backend differ, so the delta comparison is soft — but for anyone holding an XTX, the Windows Vulkan driver at batch-1 decode is not the slow path here.
+
+
 ### RX 7900 XTX (Vulkan): n-max sweep, gate A/B, the desktop tax, and flag stacks don't travel
 *by [@Splizard](https://github.com/Splizard), PR #35*
 
