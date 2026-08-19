@@ -1,0 +1,10 @@
+# Local Codex / agent state
+.codex/
+.agents/
+
+# Local benchmark downloads and outputs
+models/
+bench-results/
+*.log
+__pycache__/
+tools/

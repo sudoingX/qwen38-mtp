@@ -120,7 +120,9 @@ Ran the A/B on your card? Open a PR and add a row.
 | RTX 4090 24GB (Purusha, LoRA merge) | 47.0 | 83.4 | 2 | — | [@snakeyjay63-png](https://github.com/snakeyjay63-png) |
 | Tesla V100 32GB (Volta) | 33.3 | 48.0 | 2 | 0.75 | [@cameron](https://github.com/cameron) |
 | RTX 5060 Ti 16GB (Q4-XYZ-v2, 32K) | 26.3 | 59.5 | 4 | 0.34-0.69 | [@jaisusx](https://github.com/jaisusx) |
+| RTX 4080 16GB (Qwen3.8-27B-Ridge-3.7bpw, 64K) | 43.7 | **72.6** | 2 | — | [@TomerGamerTV](https://github.com/TomerGamerTV) |
 
+\* RTX 4080 row: Qwen3.8-27B-Ridge-3.7bpw GGUF from empero-ai, 64K context, q4_0 K/V cache, llama.cpp b10488 (CUDA 13.3, Windows), `--parallel 1`, thinking off. Method: unchanged `probe.py`, three runs x three prompts, warmup discarded. Baseline overall median 43.7 tok/s; MTP with `--spec-type draft-mtp --spec-draft-n-max 2` overall median 72.6 tok/s (+66.1%). No acceptance figure was collected.
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
 \* 3×24GB TP row: two RTX 3090 + one 3090 Ti, Unsloth UD-Q6_K_XL, tensor-parallel `--split-mode tensor`, `--parallel 4`, 500K unified KV pool, q8_0 KV, f16 draft KV, mmproj Q8, temp 1.0. VRAM ~16.6 GB/GPU baseline, ~18.7 GB/GPU with spec (tightest card). Method: stock `probe.py`. `--parallel 1` was not required on this host.
