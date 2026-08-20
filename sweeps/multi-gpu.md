@@ -179,3 +179,146 @@ This is the first mixed-architecture row in the table (Blackwell 5080 + Ampere 3
 Code still climbs more than prose (105.2 vs 79.2), same shape as the other tensor-split hosts. n-max was not swept; 2 is the 24GB-class default from rule 1 and was left ungated because one of the two cards is Blackwell (rule 2).
 
 **Honest caveat:** the server logged `backend sampling not supported with SPLIT_MODE_TENSOR; using CPU sampler` on the MTP arm. The draft context still came up (`creating MTP draft context against the target model`) and the paired delta is +67%. A later n-max sweep, or a run once tensor-split GPU sampling lands, would be the right follow-up — this PR is the n-max 2 A/B only.
+
+
+### 2× RTX A5000 24GB NVLink: split mode beats the flag, and a Q4_K_M with no MTP head
+*by [@TheRiotCoder](https://github.com/TheRiotCoder), PR #57*
+
+The table's first NVLink pair. Two RTX A5000 24GB on an NV4 bridge (~112 GB/s),
+Threadripper PRO 5965WX, 128 GB RAM, headless Ubuntu 24.04, driver 595-open, CUDA 13.3,
+ECC disabled on both cards. unsloth Q4_K_M, 131K context, q4_0 K/V, llama.cpp build 10454
+(`4df29be4f`), `--parallel 1`, thinking off, upstream `probe.py` at `a4c3028` unchanged.
+Every figure is the median of three complete passes.
+
+#### Fix the split mode first — it is worth more than the flag
+
+Rule 4 holds hard, and on this pair it is the larger of the two levers:
+
+| Config | `--split-mode layer` | `--split-mode tensor` | Gain from tensor |
+|---|---:|---:|---:|
+| spec off | 35.1 | 51.9 | **+48%** |
+| MTP `--spec-draft-n-max 2` | 54.8 | 81.1 | **+48%** |
+
+Naive default (layer, no flag) to best config is **35.1 → 96.1, 2.7x**, and tensor split
+contributes more of the first doubling than the flag does. A multi-GPU box benchmarked on
+the default split reports a baseline about a third too low, which then inflates its
+with-flag gain — worth stating next to rule 5's `--parallel 2` warning, since it distorts
+the ratio the same way.
+
+#### Ungated n-max sweep, tensor split
+
+| n-max | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Acceptance |
+|---|---:|---:|---:|---:|---:|
+| spec off | 51.9 | 52.1 | 51.9 | 51.6 | — |
+| 1 | 73.1 | 75.8 | **65.4** | 73.1 | 0.62-0.97 |
+| **2** | **80.5** | 87.2 | 64.5 | 80.5 | 0.56-0.96 |
+| 3 | 79.6 | 95.6 | 57.6 | 79.6 | 0.41-0.96 |
+| 4 | 79.5 | **96.5** | 56.2 | 79.5 | 0.33-0.90 |
+| 5 | 71.1 | 95.6 | 50.5 | 71.1 | 0.26-0.89 |
+| 6 | 72.2 | 89.4 | 45.0 | 72.2 | 0.25-0.80 |
+| **8** | **96.1** | **135.0** | 52.4 | 96.1 | 0.18-0.71 |
+
+The comparable n-max 2 arm is +56%. Overall peaks at **n-max 8, +85%**. These are 24GB
+cards, so rule 1's "24GB cards peak at n-max 2" does not hold once the pair is on tensor
+split — the same direction @EamonMcKiernan05's 3×3060 row points, at n-max 8 on a layer
+split. Topology moves the sweet spot further than VRAM does.
+
+Aggregate acceptance falls from 0.792 (1,522/1,921) at n-max 2 to 0.456 (1,894/4,149) at
+n-max 8, so **the fastest arm is the one with the lowest acceptance** — tuning on
+acceptance here would have selected n-max 1. Rule 2's "acceptance is a vanity metric" is
+the most useful line in this repo.
+
+`--spec-draft-p-min 0.60` at n-max 2 **cost 11%** (81.1 → 72.1) while lifting acceptance
+to 0.69-0.90 — the same inversion reported for desktop Blackwell. Not adopted.
+
+#### Code and prose want opposite settings
+
+The overall column hides an inversion:
+
+- **Python** climbs almost monotonically and reaches **135.0 at n-max 8**, 2.6x its own
+  spec-off baseline.
+- **Prose** peaks immediately at **n-max 1 (65.4)** and decays to 45.0 at n-max 6, which is
+  **below** the 51.9 spec-off baseline. Four of the seven depths tested leave prose worse
+  off than no speculation at all.
+
+Predictable text gets its drafts accepted; prose gets them drafted, rejected and paid for.
+That refines rule 3 — at a fixed 400-token cap, *what* is generated matters more than *how
+much*. Coding lane: n-max 8. Mixed or prose-heavy: n-max 1-2.
+
+#### Not every Q4_K_M carries the MTP head
+
+The first full pass of this benchmark failed at load, on every n-max, with a **different**
+non-unsloth Q4_K_M of the same model:
+
+```
+llama_init_from_model: context type MTP requested but model doesn't contain MTP layers
+common_speculative_init_result: failed to create MTP context
+srv    load_model: failed to create MTP context
+```
+
+| Build | Size (bytes) | `qwen35.nextn_predict_layers` | MTP loads? |
+|---|---:|---|---|
+| other Q4_K_M (sha256 `31629f53…`) | 18,973,870,432 | absent | **no** |
+| unsloth Q4_K_M (sha256 `7e78da5d…`) | 17,106,775,008 | present | yes |
+
+The working file is the **smaller** of the two, so size is no signal. The README's "the MTP
+head already ships inside the GGUF you downloaded" holds for unsloth's builds and should not
+be read as universal — the quantizer has to keep the nextn tensors. The failure mode is a
+**startup crash, not a slow server**, which is easy to misread as a bad flag or a broken
+build. Check for the metadata key before tuning.
+
+#### Variance: adjacent n-max values are not separable
+
+Three passes per arm, three `probe.py` invocations each:
+
+| Arm | Pass A | Pass B | Pass C | Spread |
+|---|---:|---:|---:|---:|
+| spec off | 52.0 | 51.6 | 51.9 | 0.8% |
+| n-max 2 | 81.1 | 80.5 | 82.9 | 3.0% |
+| n-max 8 | 88.9 | 96.1 | 107.9 | **21%** |
+
+Baseline arms repeat to under 1%; deep MTP arms move up to 21% between passes, because
+acceptance is content-dependent and the drafts differ run to run. **n-max 2, 3 and 4 are one
+plateau, not a ranking**, and a single `probe.py` invocation cannot order them — worth
+adding to the method notes alongside @dcrey7's medians-of-three rule, since the deeper the
+draft the more passes it takes to say anything.
+
+#### Method warning: `probe.py` counts SSE events, which is engine-specific
+
+I first reported a 27% *regression* from the same MTP weights under vLLM. **That was
+wrong, and the cause is worth everyone's attention: `probe.py` counts streamed SSE delta
+events, not tokens.** That is exactly right for llama.cpp and silently wrong for engines
+that pack multiple accepted tokens into one chunk.
+
+Measured on the same box, same prompt, comparing `probe.py`'s event count against
+`usage.completion_tokens` from `stream_options: {"include_usage": true}`:
+
+| Engine / arm | SSE delta events | real tokens | tokens per chunk | by chunks | by tokens |
+|---|---:|---:|---:|---:|---:|
+| llama.cpp spec off | 358 | 359 | **1.00** | 52.8 | 53.0 |
+| llama.cpp MTP n-max 2 | 400 | 400 | **1.00** | 91.5 | 91.5 |
+| llama.cpp MTP n-max 8 | 336 | 337 | **1.00** | 146.7 | 147.2 |
+| vLLM 0.25.1 + MTP | 199 | 395 | **1.98** | 33.1 | 65.8 |
+
+**llama.cpp emits one token per chunk in every arm, so every number in this repo is
+safe** — `probe.py` is a correct instrument for the engine it was written against, spec
+on or off. vLLM batches the accepted draft token together with the verified token, so
+`probe.py` reads it at roughly half rate.
+
+Corrected vLLM figures for this box, counting tokens rather than chunks, thinking off:
+
+| Config | single stream | np=8 aggregate | np=16 aggregate |
+|---|---:|---:|---:|
+| AWQ-INT4, no speculation | 60.0 | 386 | 700 |
+| AWQ-INT4 + MTP | **78.5 (+31%)** | **503 (+30%)** | **776 (+11%)** |
+
+So MTP pays on vLLM too. Two knobs that looked promising did nothing: raising
+`--max-num-batched-tokens` to 8192/16384 cleared vLLM's
+`max_num_scheduled_tokens is set to 2048` warning but moved throughput not at all
+(43.5 → 43.5 → 43.5 by the chunk metric), and neither did dropping `--max-num-seqs` to 8
+or renaming the deprecated `qwen3_5_mtp` method to `mtp`. The clamp warning is a red
+herring; the metric was the problem.
+
+**The transferable lesson:** before comparing two engines with a streaming client, check
+tokens-per-chunk on each. One line of `stream_options: {"include_usage": true}` settles
+it, and without it a speculative-decoding gain can read as a loss.
