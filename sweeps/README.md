@@ -9,5 +9,6 @@ Per-card-family deep dives, contributor-authored. The main [README](../README.md
 - [Multi-GPU rigs](multi-gpu.md), 6 sections
 - [Workstation cards](workstation.md), 3 sections
 - [RTX 5060 Ti](rtx-5060-ti.md), 1 section
+- [RTX 4060 Ti](rtx-4060-ti.md), 2 sections
 - [Apple Silicon](apple-silicon.md), 5 sections
 - [CMP 170HX](cmp-170hx.md), 1 section
