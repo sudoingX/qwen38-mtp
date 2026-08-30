@@ -115,6 +115,27 @@ What this section adds:
 - **The p-min knob is workload- and VRAM-dependent**, not just card-size-dependent: 0.60 won on the 2×9070 pool, 0.75 wins here.
 
 
+### RX 7900 XTX 24GB (Linux/ROCm 10/HIP): n-max sweep
+*by [@vijay-14](https://github.com/vijay-14)*
+
+Single RX 7900 XTX 24GB (`gfx1100`) on Ubuntu 24.04.4, kernel 6.8.0-138, AMDGPU DKMS 7.1.3 and ROCm 10.0. The server is repo-local HIP llama.cpp `62acc89`, built against the ROCm 10 libraries; host is Ryzen 7 7700X with 32 GB RAM. Model is unsloth `Qwen3.8-27B-UD-Q4_K_M.gguf` (16,464,440,224 B, sha256 `322e194f…23482`) at 131K context with q4_0 K/V, flash attention, all 66 layers on ROCm0, and `--parallel 1`. No `--spec-draft-p-min` flag was set.
+
+Method: unchanged upstream `probe.py` at `668cb10`, one discarded warmup, then three runs of each of its Python, prose, and Bash prompts (nine measured requests per arm, 400-token ceiling). Baseline has no speculative flags; N=2/3/4 add only `--spec-type draft-mtp --spec-draft-n-max N`. Acceptance is parsed from the server's nine measured `draft acceptance` lines; range is per request and parenthesis is aggregate.
+
+| n-max | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Overall median | Acceptance |
+|---|---|---|---|---|---|
+| off | 36.3 | 36.2 | 36.3 | 36.3 | — |
+| **2** | 66.6 | **50.1** | **62.6** | **62.6** | 0.56-0.94 (0.80) |
+| 3 | 74.7 | 47.5 | 56.7 | 56.7 | 0.44-0.94 (0.65) |
+| 4 | **75.3** | 41.7 | 60.2 | 60.2 | 0.33-0.90 (0.63) |
+
+**N=2 is the mixed-workload optimum: 36.3 → 62.6 tok/s (+72.5%).** Deeper drafts keep paying for the Python prompt (66.6 → 74.7 → 75.3), but prose falls at every extra depth (50.1 → 47.5 → 41.7) and Bash peaks at N=2. That makes N=2 the right table row even though N=4 is faster on code alone.
+
+All weights remained resident: baseline/N=2/N=3/N=4 used 18.06/19.41/19.56/19.71 GiB VRAM after load, while GTT stayed 45 MiB throughout. Post-probe N=2 temperatures were 56 C edge, 75 C junction, and 78 C memory; N=4 reached 81 C memory. These are Linux ROCm/HIP numbers, so they are a separate stack from the existing XTX ROCm launch row, Linux RADV/Vulkan row, and Windows/Vulkan row; compare the paired delta only within this configuration.
+
+Quality caveat: a separate local fixed-seed, short-prompt check returned deterministic text within each arm but slightly different baseline/MTP wording. This section reports the upstream probe's throughput measurement, not an identical-output speed claim.
+
+
 ### RX 7900 XTX 24GB (Windows/Vulkan): first Windows XTX A/B
 *by [@pparuzel](https://github.com/pparuzel), PR #53*
 
@@ -153,4 +174,3 @@ Two further screens from the same card, both from a custom streaming harness (no
 
 - **A shared desktop halves everything, silently.** Serving IQ4_XS at 16K next to a live compositor and browser holding 7.3 GB, 3.5 GB of weights spilled to GTT (host RAM over PCIe) and decode read 16.8 baseline / 21.4-29.7 with n-max 2 — prompt processing fell from ~740 to ~60-200 tok/s. The server starts fine and `/health` is green; nothing tells you the weights aren't resident. Check `mem_info_gtt_used` (or your vendor's equivalent) before trusting any number measured on a desk machine.
 - **Rule 1 extends to whole flag stacks.** Importing the Strix Halo config from the issues verbatim (`draft-mtp,ngram-mod --spec-draft-n-max 12 --spec-ngram-mod-n-min 24`) measured 7.7 tok/s on prose — *below the unassisted baseline* — and 17.5 on code, against 21.4/29.7 for plain n-max 2 on the same degraded setup. Deep drafts plus ngram chaining that pay on a bandwidth-starved 256-bit APU invert on a 960 GB/s card. Re-derive the stack on your own hardware class, not just n-max.
-

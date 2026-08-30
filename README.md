@@ -128,6 +128,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | RTX 5090 32GB (UD-Q4_K_XL **Dynamic 3.0**, 192K) | 74.7 | 160.8 | 4 | 0.86-0.93 | [@paulomcg](https://github.com/paulomcg) |
 | RTX 5080 16GB | 53.4 | 101.3 | 2 | 0.53-0.95 | [@ChumBoxBaron](https://github.com/ChumBoxBaron) |
 | RTX 4060 Ti 16GB (Q4-XYZ-v2, 32K) | 17.6 | 40.0 | 3 | 0.41-0.94 | [@CeIest2](https://github.com/CeIest2) |
+| RX 7900 XTX 24GB (Linux/ROCm 10, UD-Q4_K_M, 131K) | 36.3 | 62.6 | 2 | 0.56-0.94 (0.80) | [@vijay-14](https://github.com/vijay-14) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -187,6 +188,8 @@ Ran the A/B on your card? Open a PR and add a row.
 \* RTX 5080 16GB: unsloth Qwen3.8-27B Q3_K_M, ctx 65536, KV q4_0+q4_0, llama.cpp b10488, Windows 11 Pro / CUDA 13.3, VRAM 48 MiB idle → 14,445 MiB baseline / 15,359 MiB MTP, probe.py unchanged @master (both arms), `--parallel 1`, flash-attn on, thinking off.
 
 \* RTX 4060 Ti 16GB row: quimmedes/Qwen3.8-27B-XYZ Q4-XYZ-v2 (15,064,569,440 B, sha256 ab58f29fa81dd604… — same file as the 5060 Ti row above, making the two a controlled cross-card pair: 288 vs 448 GB/s), 32K context, q4_0 KV cache (both K and V), llama.cpp master `9a286ac` (2026-08-21) built from source with CUDA 12.8 (`-DCMAKE_CUDA_ARCHITECTURES=89`), Ubuntu 24.04 / CUDA, driver 580.173.02, desktop nearly idle during bench (~280 MiB GPU footprint). Method: unchanged `probe.py` at `c7bc415`, three runs x three prompts, thinking off, `--parallel 1` both arms. VRAM 14,778 MiB baseline / 15,830 MiB at n-max 3. Full n-max sweep (2/3/4 + p-min 0.70) and a Q4-XYZ v1-vs-v2 study in [sweeps/rtx-4060-ti.md](sweeps/rtx-4060-ti.md): depth pays to n-max 3 (+11% over n2), n-max 4 OOMs at load (same 130 MiB shortfall as the 5060 Ti's n-max 6, also with `-b 512 -ub 512`), p-min 0.70 gating is a wash at the ceiling (−0.5%, acceptance 0.72-0.98), and the quant version alone moves the depth optimum by a full step on identical silicon and build.
+
+\* RX 7900 XTX Linux/ROCm 10 row: unsloth `Qwen3.8-27B-UD-Q4_K_M.gguf` (16,464,440,224 B, sha256 `322e194f…23482`), 131K context, q4_0 K/V cache, flash attention on, all 66 layers on the GPU, and `--parallel 1` both arms. RX 7900 XTX (`gfx1100`), Ryzen 7 7700X, Ubuntu 24.04.4 / kernel 6.8.0-138, AMDGPU DKMS 7.1.3, ROCm 10.0; repo-local HIP llama.cpp `62acc89`. Method: unchanged `probe.py` at `668cb10`, one warmup then three runs × three prompts, thinking off; table figure is the overall median of the nine measured requests. Baseline 36.3 tok/s; MTP adds only `--spec-type draft-mtp --spec-draft-n-max 2` (no p-min flag) and reaches 62.6 tok/s (+72.5%). VRAM 18.06 GiB baseline / 19.41 GiB N=2; GTT stayed 45 MiB. Acceptance 1,543/1,920 = 0.804, range 0.56–0.94. Full N=2/3/4 sweep below. A separate fixed-seed local check produced deterministic answers within each arm but different baseline/MTP wording, so this is a throughput observation, not an identical-output speed claim.
 
 ### Deep dives
 
