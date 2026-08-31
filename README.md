@@ -128,6 +128,7 @@ Ran the A/B on your card? Open a PR and add a row.
 | RTX 5090 32GB (UD-Q4_K_XL **Dynamic 3.0**, 192K) | 74.7 | 160.8 | 4 | 0.86-0.93 | [@paulomcg](https://github.com/paulomcg) |
 | RTX 5080 16GB | 53.4 | 101.3 | 2 | 0.53-0.95 | [@ChumBoxBaron](https://github.com/ChumBoxBaron) |
 | RTX 4060 Ti 16GB (Q4-XYZ-v2, 32K) | 17.6 | 40.0 | 3 | 0.41-0.94 | [@CeIest2](https://github.com/CeIest2) |
+| 4× RTX 2080 Ti 22GB (TP, UD-Q8_K_XL, 262K) | 43.0 | 74.3 | 3 | — | [@caodj](https://github.com/caodj) |
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
@@ -187,6 +188,7 @@ Ran the A/B on your card? Open a PR and add a row.
 \* RTX 5080 16GB: unsloth Qwen3.8-27B Q3_K_M, ctx 65536, KV q4_0+q4_0, llama.cpp b10488, Windows 11 Pro / CUDA 13.3, VRAM 48 MiB idle → 14,445 MiB baseline / 15,359 MiB MTP, probe.py unchanged @master (both arms), `--parallel 1`, flash-attn on, thinking off.
 
 \* RTX 4060 Ti 16GB row: quimmedes/Qwen3.8-27B-XYZ Q4-XYZ-v2 (15,064,569,440 B, sha256 ab58f29fa81dd604… — same file as the 5060 Ti row above, making the two a controlled cross-card pair: 288 vs 448 GB/s), 32K context, q4_0 KV cache (both K and V), llama.cpp master `9a286ac` (2026-08-21) built from source with CUDA 12.8 (`-DCMAKE_CUDA_ARCHITECTURES=89`), Ubuntu 24.04 / CUDA, driver 580.173.02, desktop nearly idle during bench (~280 MiB GPU footprint). Method: unchanged `probe.py` at `c7bc415`, three runs x three prompts, thinking off, `--parallel 1` both arms. VRAM 14,778 MiB baseline / 15,830 MiB at n-max 3. Full n-max sweep (2/3/4 + p-min 0.70) and a Q4-XYZ v1-vs-v2 study in [sweeps/rtx-4060-ti.md](sweeps/rtx-4060-ti.md): depth pays to n-max 3 (+11% over n2), n-max 4 OOMs at load (same 130 MiB shortfall as the 5060 Ti's n-max 6, also with `-b 512 -ub 512`), p-min 0.70 gating is a wash at the ceiling (−0.5%, acceptance 0.72-0.98), and the quant version alone moves the depth optimum by a full step on identical silicon and build.
+\* 4× RTX 2080 Ti 22GB row: four Turing cards reporting 22528 MiB each (stock 2080 Ti is 11GB; these are the 22GB boards), unsloth UD-Q8_K_XL + mmproj-F16 (`--image-min-tokens 1024`), **262K context**, q8_0 KV cache (K and V), `--split-mode tensor`, `-ngl 99`/`999` (full offload), flash-attn on, `-b 2048`, `--parallel 1`, driver 595.71.05 / CUDA 13.2. Method: stock `probe.py`, three runs x three prompts. Both arms used `--reasoning-preserve --reasoning-budget 32768` and a custom jinja chat template; only the MTP arm added `--spec-type draft-mtp --spec-draft-n-max 3` (ungated) plus `--reasoning-budget-message`. Baseline overall median 43.0 (mean 42.9), per-prompt 43.1 / 42.5 / 43.0; with flag 74.3 (mean 74.2), per-prompt 91.3 / 56.5 / 74.3 (**+73%**). Baseline is flat across prompts (bandwidth-bound); the flag arm shows the usual code-up/prose-down split. llama.cpp build not reported. Acceptance not captured. nvidia-smi snapshot ~12.0–13.6 GB/GPU of 22 GB (process list empty).
 
 ### Deep dives
 
