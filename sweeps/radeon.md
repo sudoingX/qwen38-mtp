@@ -179,15 +179,16 @@ Two further screens from the same card, both from a custom streaming harness (no
 ### AMD Radeon AI PRO R9700 32GB (Windows/Vulkan): first Windows stack A/B
 *by [@misterkerns](https://github.com/misterkerns)*
 
-Same silicon as the Linux Vulkan/RADV R9700 row above, different OS and driver: Windows 11 Pro build 26200, AMD driver 32.0.22042.14002 (not RADV), official `ggml.llamacpp` WinGet b10711 (`9723942ad`) `win-vulkan-x64`. unsloth UD-Q4_K_XL Dynamic 3.0, 262K context, q4_0 KV, `--parallel 1`, thinking off. Method: unchanged `probe.py` at `431bf8a`, three runs x three prompts, warmup discarded. Spec arms ungated (`--spec-type draft-mtp --spec-draft-n-max N` only). Host Ryzen 9 5900XT, 32 GB RAM. Desktop shared the card (Firefox ~2.45 GiB + DWM ~1.20 GiB dedicated); llama-server stayed fully resident at 20.5–22.7 GiB of 32 GB and the spec-off arm was flat to 0.1 tok/s, so this is not a rule-7 spill case.
+Same silicon as the Linux Vulkan/RADV R9700 row above, different OS and driver: Windows 11 Pro build 26200, AMD driver 32.0.22042.14002 (not RADV), official `ggml.llamacpp` WinGet b10711 (`9723942ad`) `win-vulkan-x64`. unsloth UD-Q4_K_XL Dynamic 3.0, 262K context, q4_0 KV, `--parallel 1`, thinking off. Method: unchanged `probe.py` at `431bf8a`, three runs x three prompts, warmup discarded. Spec arms ungated (`--spec-type draft-mtp --spec-draft-n-max N` only). Host Ryzen 9 5900XT, 32 GB RAM. Harbor (llamaswap ROCm gfx1201, ollama ROCm, hermes, webui) and snap Ollama were stopped for the run; Firefox/Discord closed. Pre-serve adapter dedicated ~0.90 GiB; DWM stayed at ~1.24 GiB. llama-server remained fully resident (20.50 GiB baseline / 22.75 GiB at n-max 4 of 32 GB). Baseline was flat to 0.2 tok/s.
 
 | n-max | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Overall median | Acceptance |
 |---|---|---|---|---|---|
-| off | 29.9 | 29.9 | 29.9 | 29.9 | — |
-| 2 | 58.1 | **43.8** | 52.7 | 52.7 | 0.57-0.94 (0.81) |
-| **3** | 66.1 | 41.5 | 55.6 | **55.6** | 0.44-0.92 (0.73) |
-| 4 | **72.8** | 37.0 | **56.3** | 56.3 | 0.31-0.89 (0.64) |
+| off | 29.8 | 29.8 | 29.7 | 29.7 | — |
+| 2 | 57.2 | **42.4** | 52.0 | 52.0 | 0.56-0.94 (0.81) |
+| **3** | 67.2 | 41.5 | 56.3 | **56.3** | 0.39-0.97 (0.72) |
+| 4 (pass 1) | 68.8 | 39.3 | 62.7 | 62.7 | 0.33-0.91 (0.66) |
+| 4 (pass 2) | **69.0** | 35.9 | 51.0 | 51.0 | — |
 
-**n-max 3 is the mixed-workload row: 29.9 → 55.6 (+86%).** n-max 4 is 0.7 tok/s faster overall on the strength of Python (72.8) while prose falls to 37.0 on 0.31–0.42 acceptance — same code-up/prose-down shape as the Linux R9700 sweep and the Windows XTX row. n-max 2 is the prose peak (43.8) and the cleanest comparison against the existing Linux RADV row (27.0 → 43.3 at n-max 2): Windows Vulkan is faster on both arms, +76% vs +60% at the same draft depth.
+**n-max 3 is the mixed-workload row: 29.7 → 56.3 (+90%).** n-max 4 is not a resolved win: two complete probe passes read 62.7 then 51.0 overall (means 56.0 / 52.6). A single pass would have crowned n-max 4; the repeat put it below n-max 3. Same warning as the RX 9070 section. Python keeps climbing (57.2 → 67.2 → 69.0), prose peaks at n-max 2 (42.4) and falls at 4. n-max 2 is the cleanest depth-matched comparison against the existing Linux RADV row (27.0 → 43.3 at n-max 2): Windows Vulkan is faster on both arms, +75% vs +60% at the same draft depth.
 
-Acceptance is from `draft acceptance` log lines, warmup excluded. Aggregates: n-max 2 1568/1930 = 0.81, n-max 3 1594/2193 = 0.73, n-max 4 1912/2988 = 0.64. Dedicated process VRAM: 20.5 GiB baseline, 22.45 GiB at n-max 2, 22.74 GiB at n-max 4.
+Acceptance is from `draft acceptance` log lines, warmup excluded. Aggregates: n-max 2 1621/2013 = 0.81, n-max 3 1863/2593 = 0.72, n-max 4 pass 1 1774/2688 = 0.66. Dedicated process VRAM: 20.50 GiB baseline, 22.75 GiB at n-max 4.
