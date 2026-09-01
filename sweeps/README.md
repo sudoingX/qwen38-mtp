@@ -14,3 +14,4 @@ Per-card-family deep dives, contributor-authored. The main [README](../README.md
 - [RTX 4060 Ti](rtx-4060-ti.md), 2 sections
 - [Apple Silicon](apple-silicon.md), 5 sections
 - [CMP 170HX](cmp-170hx.md), 1 section
+- [Instinct (CDNA)](instinct-cdna.md), 1 section
