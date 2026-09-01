@@ -174,3 +174,20 @@ Two further screens from the same card, both from a custom streaming harness (no
 
 - **A shared desktop halves everything, silently.** Serving IQ4_XS at 16K next to a live compositor and browser holding 7.3 GB, 3.5 GB of weights spilled to GTT (host RAM over PCIe) and decode read 16.8 baseline / 21.4-29.7 with n-max 2 — prompt processing fell from ~740 to ~60-200 tok/s. The server starts fine and `/health` is green; nothing tells you the weights aren't resident. Check `mem_info_gtt_used` (or your vendor's equivalent) before trusting any number measured on a desk machine.
 - **Rule 1 extends to whole flag stacks.** Importing the Strix Halo config from the issues verbatim (`draft-mtp,ngram-mod --spec-draft-n-max 12 --spec-ngram-mod-n-min 24`) measured 7.7 tok/s on prose — *below the unassisted baseline* — and 17.5 on code, against 21.4/29.7 for plain n-max 2 on the same degraded setup. Deep drafts plus ngram chaining that pay on a bandwidth-starved 256-bit APU invert on a 960 GB/s card. Re-derive the stack on your own hardware class, not just n-max.
+
+
+### AMD Radeon AI PRO R9700 32GB (Windows/Vulkan): first Windows stack A/B
+*by [@misterkerns](https://github.com/misterkerns)*
+
+Same silicon as the Linux Vulkan/RADV R9700 row above, different OS and driver: Windows 11 Pro build 26200, AMD driver 32.0.22042.14002 (not RADV), official `ggml.llamacpp` WinGet b10711 (`9723942ad`) `win-vulkan-x64`. unsloth UD-Q4_K_XL Dynamic 3.0, 262K context, q4_0 KV, `--parallel 1`, thinking off. Method: unchanged `probe.py` at `431bf8a`, three runs x three prompts, warmup discarded. Spec arms ungated (`--spec-type draft-mtp --spec-draft-n-max N` only). Host Ryzen 9 5900XT, 32 GB RAM. Desktop shared the card (Firefox ~2.45 GiB + DWM ~1.20 GiB dedicated); llama-server stayed fully resident at 20.5–22.7 GiB of 32 GB and the spec-off arm was flat to 0.1 tok/s, so this is not a rule-7 spill case.
+
+| n-max | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Overall median | Acceptance |
+|---|---|---|---|---|---|
+| off | 29.9 | 29.9 | 29.9 | 29.9 | — |
+| 2 | 58.1 | **43.8** | 52.7 | 52.7 | 0.57-0.94 (0.81) |
+| **3** | 66.1 | 41.5 | 55.6 | **55.6** | 0.44-0.92 (0.73) |
+| 4 | **72.8** | 37.0 | **56.3** | 56.3 | 0.31-0.89 (0.64) |
+
+**n-max 3 is the mixed-workload row: 29.9 → 55.6 (+86%).** n-max 4 is 0.7 tok/s faster overall on the strength of Python (72.8) while prose falls to 37.0 on 0.31–0.42 acceptance — same code-up/prose-down shape as the Linux R9700 sweep and the Windows XTX row. n-max 2 is the prose peak (43.8) and the cleanest comparison against the existing Linux RADV row (27.0 → 43.3 at n-max 2): Windows Vulkan is faster on both arms, +76% vs +60% at the same draft depth.
+
+Acceptance is from `draft acceptance` log lines, warmup excluded. Aggregates: n-max 2 1568/1930 = 0.81, n-max 3 1594/2193 = 0.73, n-max 4 1912/2988 = 0.64. Dedicated process VRAM: 20.5 GiB baseline, 22.45 GiB at n-max 2, 22.74 GiB at n-max 4.
