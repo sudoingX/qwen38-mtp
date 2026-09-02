@@ -201,7 +201,7 @@ Ran the A/B on your card? Open a PR and add a row.
 
 ### Deep dives
 
-Every contributor sweep and study is in [sweeps/](sweeps/), grouped by card family and PR-able like the table: [RTX 5090](sweeps/rtx-5090.md) · [RTX 3090](sweeps/rtx-3090.md) · [Radeon](sweeps/radeon.md) · [APUs and iGPUs](sweeps/apu-igpu.md) · [Multi-GPU](sweeps/multi-gpu.md) · [Workstation](sweeps/workstation.md) · [RTX 5060 Ti](sweeps/rtx-5060-ti.md) · [RTX 4060 Ti](sweeps/rtx-4060-ti.md) · [Apple Silicon](sweeps/apple-silicon.md) · [CMP 170HX](sweeps/cmp-170hx.md)
+Every contributor sweep and study is in [sweeps/](sweeps/), grouped by card family and PR-able like the table: [RTX 5090](sweeps/rtx-5090.md) · [RTX 3090](sweeps/rtx-3090.md) · [Radeon](sweeps/radeon.md) · [APUs and iGPUs](sweeps/apu-igpu.md) · [Multi-GPU](sweeps/multi-gpu.md) · [Workstation](sweeps/workstation.md) · [RTX 5060 Ti](sweeps/rtx-5060-ti.md) · [RTX 4060 Ti](sweeps/rtx-4060-ti.md) · [Apple Silicon](sweeps/apple-silicon.md) · [CMP 170HX](sweeps/cmp-170hx.md) · [CMP 50HX](sweeps/cmp-50hx.md)
 
 ## License
 
