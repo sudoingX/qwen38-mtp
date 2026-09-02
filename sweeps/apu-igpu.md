@@ -107,3 +107,21 @@ agree to about 1%. So on this box three passes inside one server launch understa
 bar, and a clean-looking 3% difference between two separately launched arms is not evidence of
 anything. That is why the n-max peak above is quoted as 3 to 4 rather than a single winner, and it
 is worth keeping in mind when reading any sweep in this repo, including this one.
+
+
+### AMD Radeon 780M iGPU (Phoenix / Hawk Point): n-max sweep (2 vs 3 vs 4)
+*by [@ob7282](https://github.com/ob7282)*
+
+GMKtec NucBox K12 mini-PC, AMD Radeon 780M Graphics (12 CUs RDNA3, Phoenix), 32 GB UMA (DDR5 5600 MT/s), unsloth `Qwen3.8-27B-UD-Q4_K_XL.gguf` (17.9 GB), 131K context, q4_0 KV cache, llama.cpp build 10354 (`d2f83055d`), Windows 11 with official AMD Vulkan driver 32.0.31041.1004. Method: stock `probe.py` at commit `431bf8a`, three runs x three prompts per arm, thinking off, `--parallel 1`.
+
+| n-max | Overall Median | Overall Mean | P1 Code (Python) | P2 Prose (mmap) | P3 Code (Bash) | Acceptance Range | Aggregate Acceptance |
+|---|---|---|---|---|---|---|---|
+| **baseline (spec off)** | 4.1 | 4.1 | 4.1 | 4.1 | 4.1 | - | - |
+| **2 (sweet spot)** | **8.4** | **8.0** | 9.1 | **6.5** | **8.4** | 0.50–0.92 | **77.0%** (1599/2076) |
+| **3** | **8.4** | 7.8 | **9.2** (peak: 9.5) | 5.8 | **8.4** | 0.41–0.93 | 73.0% (1754/2403) |
+| **4** | 7.1 | 7.1 | 9.1 | 5.0 | 7.1 | 0.36–0.91 | 65.5% (2001/3057) |
+
+Key takeaways for Phoenix/Hawk Point 12 CU silicon:
+- **MTP n-max 2 more than doubles decode throughput (+105%)** from 4.1 to 8.4 tok/s overall, with code climbing +122% to 9.1 tok/s.
+- **n-max 2 is the clear daily driver**: While n-max 3 edges Python code slightly higher (peaking at 9.5 tok/s), prose suffers a penalty (6.5 → 5.8 tok/s) due to verification drag on less predictable text.
+- **n-max 4 collapses overall**: Verification costs on rejected drafts drop overall throughput to 7.1 tok/s and prose to 5.0 tok/s. Without confidence gating (`--spec-draft-p-min`), deep drafting beyond 2 on this 128-bit memory bus becomes counterproductive.
