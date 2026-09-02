@@ -174,3 +174,29 @@ Two further screens from the same card, both from a custom streaming harness (no
 
 - **A shared desktop halves everything, silently.** Serving IQ4_XS at 16K next to a live compositor and browser holding 7.3 GB, 3.5 GB of weights spilled to GTT (host RAM over PCIe) and decode read 16.8 baseline / 21.4-29.7 with n-max 2 — prompt processing fell from ~740 to ~60-200 tok/s. The server starts fine and `/health` is green; nothing tells you the weights aren't resident. Check `mem_info_gtt_used` (or your vendor's equivalent) before trusting any number measured on a desk machine.
 - **Rule 1 extends to whole flag stacks.** Importing the Strix Halo config from the issues verbatim (`draft-mtp,ngram-mod --spec-draft-n-max 12 --spec-ngram-mod-n-min 24`) measured 7.7 tok/s on prose — *below the unassisted baseline* — and 17.5 on code, against 21.4/29.7 for plain n-max 2 on the same degraded setup. Deep drafts plus ngram chaining that pay on a bandwidth-starved 256-bit APU invert on a 960 GB/s card. Re-derive the stack on your own hardware class, not just n-max.
+
+
+### AMD Radeon AI PRO R9700 32GB (Windows/Vulkan): first Windows stack A/B
+*by [@misterkerns](https://github.com/misterkerns)*
+
+Same silicon as the Linux Vulkan/RADV R9700 row above, different OS and driver: Windows 11 Pro build 26200, AMD driver 32.0.22042.14002 (not RADV), official `ggml.llamacpp` WinGet b10711 (`9723942ad`) `win-vulkan-x64`. unsloth UD-Q4_K_XL Dynamic 3.0, 262K context, q4_0 KV, `--parallel 1`, thinking off. Method: unchanged `probe.py` at `431bf8a`, three runs x three prompts, warmup discarded. Spec arms add only `--spec-type draft-mtp --spec-draft-n-max N` unless a p-min is named. Host Ryzen 9 5900XT, 32 GB RAM. Harbor (llamaswap ROCm gfx1201, ollama ROCm, hermes, webui) and snap Ollama were stopped for the run; Firefox/Discord closed. Pre-serve adapter dedicated ~0.90 GiB; DWM stayed at ~1.24 GiB. llama-server remained fully resident (20.50 GiB baseline / 22.75 GiB at n-max 4 of 32 GB). Baseline was flat to 0.2 tok/s.
+
+| n-max | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Overall median | Acceptance |
+|---|---|---|---|---|---|
+| off | 29.8 | 29.8 | 29.7 | 29.7 | — |
+| 2 | 57.2 | **42.4** | 52.0 | 52.0 | 0.56-0.94 (0.81) |
+| **3 ungated** | 67.2 | 41.5 | 56.3 | **56.3** | 0.39-0.97 (0.72) |
+| 3, `p-min 0.60` | 66.9 | 41.4 | 56.3 | 56.3 | 0.55-0.95 (0.84) |
+| 4 ungated (pass 1) | 68.8 | 39.3 | 62.7 | 62.7 | 0.33-0.91 (0.66) |
+| 4 ungated (pass 2) | 69.0 | 35.9 | 51.0 | 51.0 | — |
+| 4, `p-min 0.60` | **69.3** | 37.5 | **61.0** | 61.0 | 0.53-0.90 (0.80) |
+
+**n-max 3 ungated is the mixed-workload row: 29.7 → 56.3 (+90%).** n-max 4 is not a resolved win ungated (two passes 62.7 then 51.0, means 56.0 / 52.6). Gating n-max 4 at p-min 0.60 stabilises it (mean 56.0, bash 58.1–62.6) but prose stays at 37.5 — it does not become the mixed daily. Python keeps climbing (57.2 → 67.2 → 69.3), prose peaks at n-max 2 (42.4) and falls at 4.
+
+**p-min on this card is a vanity metric for speed, a real one for acceptance.** At n-max 3, p-min 0.60 is a wash on throughput (56.3 vs 56.3, means 54.6 vs 54.2) while aggregate acceptance rises 0.72 → 0.84 (1863/2593 vs 1898/2265). That is rule 2's "fast card" shape, not the 2×9070 shape: on the dual-9070 pool, p-min 0.60 made n-max 4 the winner; on this single 32GB Navi 48 it does not. R9700 is the same silicon family as 9070 XT with double the VRAM and a 640 GB/s bus — verification is cheap enough that every draft is worth attempting. Ship n-max 3 ungated; add p-min 0.60 only if you want fewer rejected drafts, not more tok/s.
+
+n-max 2 is the cleanest depth-matched comparison against the existing Linux RADV row (27.0 → 43.3 at n-max 2): Windows Vulkan is faster on both arms, +75% vs +60% at the same draft depth. A WSL2 ROCm gfx1201 container on this same box (llama.cpp b10740, same GGUF/flags) read 25.3 → 46.8 at n-max 3 — a third stack, slower than native Windows Vulkan. Harbor's daily llamaswap image was not used for these numbers.
+
+Acceptance is from `draft acceptance` log lines, warmup excluded. Aggregates: n-max 2 1621/2013 = 0.81, n-max 3 ungated 1863/2593 = 0.72, n-max 3 p-min 0.60 1898/2265 = 0.84, n-max 4 p-min 0.60 1816/2270 = 0.80. Dedicated process VRAM: 20.50 GiB baseline, 22.75 GiB at n-max 4.
+
+**Cookbook / landmines** (same box, documented so nobody re-learns them): the sudoingX launch shape (UD-Q4_K_M, 131K, n-max 2) measured **52.6**, below n-max 3 XL. n-max 6 dropped prose to **27.5**, under the 29.7 baseline. `draft-dflash` without a sidecar GGUF is a silent no-op (29.6). Official `llama-b10740-bin-win-rocm-7.14-x64.zip` loads MTP then decodes at **~5 t/s** — the zip is not a gfx1201 HIP build; do not use it on R9700. Vulkan device string on this Windows driver reports **shared memory 32768** (RADV often 65536). Full hunt log: keep local `LAB.md` with the PR notes.
