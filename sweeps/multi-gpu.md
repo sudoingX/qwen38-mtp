@@ -164,6 +164,92 @@ A separate production-layout follow-up loaded the BF16 vision projector and used
 One Windows-specific memory result: `--load-mode none` reduced physical RAM added after load from 16.33 GiB to 1.85 GiB versus default `auto`/mmap. The same two 1,200-token outputs remained byte-identical, with effectively unchanged decode (63.18/83.58 versus 63.06/83.95 tok/s). Executable worker gates also passed literal CRUD (5/5), deterministic scoring (5/5), and structured-agent JSON validation. These are supplemental production checks, not part of the main-table paired A/B.
 
 
+### RTX 2070 8GB + RTX 5060 Ti 16GB (mismatched Turing+Blackwell, x1 riser): the free split-mode win shrinks when the interconnect is slow, and cache quant doesn't buy the context it promises once MTP is in the mix
+*by [@Lucas12807](https://github.com/Lucas12807), unsolicited*
+
+A budget mismatched pair, not a matched multi-GPU box: RTX 2070 8GB (Turing) migrated out of
+the case onto a powered USB x1 riser (PCIe 2.0 x1, ~500 MB/s) because the AM4 board
+(ASUS PRIME B450M-A) has only one physical x16 slot, which the RTX 5060 Ti 16GB (Blackwell)
+keeps, also driving the desktop. Every other host in this file has at least a real x4/x8 PCIe
+link or NVLink between cards; this is the slowest interconnect in the table by a wide margin
+(~16x slower than the PCIe 3.0 x8 in the 5060 Ti pair's own row above). unsloth
+Qwen3.8-27B-UD-Q4_K_XL, llama.cpp b10662 (CUDA 13.3), Windows 11, `--parallel 1` throughout.
+Method: fixed-prompt `/completion` requests at temp=0 against a live server, not `probe.py`
+— comparable in shape, not identical tooling, and single-digit sample counts per arm (2-3),
+so treat these as directional rather than as tight as the rows above.
+
+#### Split mode still wins, but the riser caps how much
+
+Same GGUF, same `-c 65536`, q8_0 KV, only `--split-mode` and the spec flag changing:
+
+| split mode | spec | tok/s |
+|---|---|---|
+| `layer` (auto, default) | off | 19.7 |
+| `layer` | n-max 1 | 30.6 |
+| `layer` | n-max 2 | 37.1 |
+| **`layer`** | **n-max 3** | **37.8** |
+| `layer` | n-max 4 | 35.4 |
+| `tensor --tensor-split 5,2` | off | 25.5 |
+| `tensor --tensor-split 5,2` | n-max 2 | **37.7** |
+| `tensor --tensor-split 5,2` | n-max 3 | 36.1 |
+| `tensor --tensor-split 5,2` | n-max 4 | 32.5 |
+
+`tensor` still beats `layer` on the baseline (19.7 → 25.5, **+29%**), confirming rule 4 holds
+even on a riser this slow — but +29% is well under the +68% the same card pair's own row above
+measured on PCIe 3.0 x8, and under the +48% the NVLinked A5000 pair saw. The all-reduce that
+tensor-split requires every layer has to cross the x1 link, so it eats more of the free win
+here than on any other host in this table.
+
+**The n-max optimum also moves down, not up, once tensor-split is in play** — the opposite of
+what the 5060 Ti pair's own PCIe-x8 row found (`tensor` peaking at n-max 4 there). Here
+`tensor` peaks at n-max 2 (37.7) and n-max 4 is already below the `layer` peak (32.5 vs 37.8).
+Reading rule 1 alongside this row: the sweet spot depends on topology *and* how slow that
+topology is — a fast interconnect can absorb a deeper draft under tensor-split, a slow one
+can't, so re-sweep n-max after switching split mode even when another host with the same card
+pair already published one.
+
+Ended up landing on `tensor-split 13,7` in production (proportionally more weight on the 2070,
+its floor before OOM on the MTP draft-context allocation), not `5,2` — moving load toward the
+smaller card cost only ~1 tok/s (36.0→34.9) while giving it more working margin. Bisection
+across ratios found the OOM boundary is much narrower than a linear extrapolation from VRAM
+headroom would suggest: `13,7` (35% of weights on the 2070) loads fine, `5,3` (37.5%) OOMs
+on the MTP draft buffer alone. The draft-context allocation happens last, after weights and
+main KV cache, so a ratio that looks fine by every earlier log line can still fail at the very
+end of load.
+
+#### Cache K/V quantization doesn't double context once MTP owns the last few hundred MB
+
+Expected doubling the KV cache compression (q8_0 → q4_0) to roughly double the max context at
+fixed VRAM. Measured on the production config (`tensor-split 13,7`, `--no-mmproj-offload`,
+MTP n-max 2):
+
+| cache | max `-c` that loads and completes a real generation |
+|---|---|
+| q8_0 | 73728 |
+| q4_0 | 98304 (**+33%**, not +100%) |
+
+Both ceilings fail one step higher (81920 for q8_0, 122880 for q4_0) on the same error: OOM
+on the 2070 while allocating the MTP draft context, not the main KV cache. The K/V cache
+itself did shrink by roughly half as expected — the shortfall is that MTP's own draft
+context and the `--split-mode tensor` bookkeeping are fixed-size overhead on the 8GB card
+that doesn't shrink with the cache quant, and on a card this tight that fixed overhead eats
+most of the freed headroom before it becomes usable context. Perplexity on a 200KB
+real-code corpus (Flask + Express sources, `llama-perplexity`) was 1.3709 (q8_0) vs 1.3756
+(q4_0) — +0.34%, inside noise — and 13/14 hand-verified coding tasks (executed, not just
+read) matched between the two cache types, so the quant itself is close to free on this
+hybrid-attention model; the context ceiling just isn't where a linear model of "half the
+bytes, double the tokens" would put it. Worth checking before assuming a KV-quant switch pays
+its full theoretical dividend on any card that's also carrying MTP's own buffers near its
+limit.
+
+`--no-mmproj-offload` (keeps the vision projector resident in host RAM instead of VRAM,
+loading it back only per request) was free on this box: 34.98 vs 34.88 tok/s text-only,
+identical correct output on an image-description request, and the vision projector's ~1.1 GB
+moved off the 5060 Ti permanently — no VRAM spike observed even mid-request with an image.
+Worth trying on any tight vision-capable multi-GPU box before spending a context-size budget
+on the projector.
+
+
 ### RTX 5080 16GB + RTX 3090 24GB (tensor split): mixed Blackwell + Ampere
 *by [@plyra](https://x.com/plyra)*
 
