@@ -3,6 +3,7 @@
 Per-card-family deep dives, contributor-authored. The main [README](../README.md) holds the flag, the seven rules, and the community table; everything deeper lives here.
 
 - [RTX 5090](rtx-5090.md), 4 sections
+- [RTX 4090](rtx-4090.md), 1 section
 - [RTX 3090](rtx-3090.md), 5 sections
 - [Radeon (RDNA)](radeon.md), 5 sections
 - [APUs and iGPUs](apu-igpu.md), 2 sections
