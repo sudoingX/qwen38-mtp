@@ -63,78 +63,80 @@ Run it once against a baseline serve and once with the flag, same everything oth
 
 ## Community numbers
 
-Ran the A/B on your card? Open a PR and add a row.
+Ran the A/B on your card? Open a PR and add a row — **please fill in the `Quant` column**, since the optimal `n-max` moves with the weight quant (see [#39](https://github.com/sudoingX/qwen38-mtp/issues/39)).
 
-| Card | Baseline | With flag | n-max | Acceptance | Contributor |
-|---|---|---|---|---|---|
-| RTX 3090 24GB | 31.0 | 41.3 | 2 | 0.78 | [@sudoingX](https://x.com/sudoingX) |
-| RTX 5090 mobile 24GB | 36.7 | 50.9 | 2 | 0.79 | [@sudoingX](https://x.com/sudoingX) |
-| RTX 4090 24GB | 47.7 | 76.3 | 2 | 0.56 | [@Spadav_](https://x.com/Spadav_) |
-| RTX A6000 48GB (Ada) | 26.7 | 52.5 | 2 | 0.54-0.98 | [@lingster](https://github.com/lingster) |
-| RX 7900 XTX 24GB | 30.7 | 43.9 | 2 | 0.60-0.95 | [@Jqianggu](https://x.com/Jqianggu) |
-| 2× RTX 3090 + 3090 Ti 24GB (TP) | 49.1 | 81.1 | 2 | 0.52-0.96 | [@guilhermedemelocabral](https://github.com/guilhermedemelocabral) |
-| RTX 4090 24GB (UD-Q4_K_XL) | 36.1 | 74.8 | 2 | 0.56-0.94 | [@rkvhtd](https://github.com/rkvhtd) |
-| 2x RX 9070 16GB (Vulkan) | 22.1 | 41.6 | 2 | 0.73 | [@tomertec](https://github.com/tomertec) |
-| AMD Radeon AI PRO R9700 32GB | 27.0 | 43.3 | 2 | 0.60-0.94 | [@ajnytebot](https://github.com/ajnytebot) |
-| Ryzen AI Max+ 395 / Radeon 8060S | 11.5 | 23.7 | 2 | 0.52-0.94 | [@shiwuxiu](https://github.com/shiwuxiu) |
-| AMD Radeon 890M iGPU (Strix Point) 48GB UMA | 2.7 | 5.7 | 2 | 0.59-0.91 | [@davidglogan](https://github.com/davidglogan) |
-| RTX PRO 6000 Blackwell 96GB | 63.8 | 91.5 | 2 | 0.72-0.81 | [@commdata2338](https://github.com/commdata2338) |
-| RTX 5090 32GB (desktop) | 61.4 | 135.0 | 4 | 0.38-0.87 | [@taco-devs](https://github.com/taco-devs) |
-| RTX 5090 32GB (Q6_K, 128K) | 61.9 | 130.0 | 2 | 0.52-0.95 | [@hypertectonic](https://x.com/hypertectonic) |
-| RTX 5090 32GB (Q6_K, 256K) | 62.0 | 121.7 | 2 | 0.50-0.95 | [@hypertectonic](https://x.com/hypertectonic) |
-| RTX 3090 Ti 24GB (Q4_K_M, 128K) | 42.0 | 60.9 | 2 | 0.47-0.93 | [@hypertectonic](https://x.com/hypertectonic) |
-| RTX 3090 Ti 24GB (Q4_K_M, 256K) | 41.2 | 61.4 | 2 | 0.55-0.94 | [@hypertectonic](https://x.com/hypertectonic) |
-| RTX 5090 32GB desktop (UD-Q5_K_XL) | 66.3 | 144.2 | 4 | 0.32-0.89 | [@TrickRiggin](https://github.com/TrickRiggin) |
-| 3× RTX 3060 12GB (layer split) | 17.3 | 24.5 | 8 | 0.87 | [@EamonMcKiernan05](https://github.com/EamonMcKiernan05) |
-| AMD Radeon 9060 XT 16 GB | 15.2 | 28.7 | 2 | 0.62-0.93 | [@kdrapel](https://github.com/kdrapel) |
-| RTX 3090 24GB (turboquant, n-max 6) | 39.8 | 61.5 | 6 | 0.61-0.90 | [@NicholaiVogel](https://github.com/NicholaiVogel) |
-| RTX 3090 24GB (b10450) | 41.3 | 63.5 | 2 | 0.69-0.87 | [@hauntedhost](https://github.com/hauntedhost) |
-| GMK EVO-X2, Ryzen AI Max+ 395 (64GB unified, ROCm/HIP) | 10.5-11.1 | 21.4-22.2 | 12 | 0.95-1.0 | [@KyaniteLabs](https://github.com/KyaniteLabs/qwen38-27b-strix-halo) |
-| 2× RTX 5060 Ti 16GB (PP, default `-sm layer`) | 22.1 | 42.8 | 2 | 0.53-0.94 | [@Jackwwg83](https://github.com/Jackwwg83) |
-| 2× RTX 5060 Ti 16GB (TP, `-sm tensor`) | 37.1 | 65.9 | 2 | 0.51-0.88 | [@Jackwwg83](https://github.com/Jackwwg83) |
-| RTX 5090 32GB (desktop) | 62.7 | **108.7** | 3 | 0.72 | [@jcr211](https://github.com/jcr211) |
-| RTX 5090 32GB (desktop) | 69.3 | 129.1 | 4 | 0.55 | [@paulomcg](https://github.com/paulomcg) |
-| RX 7900 GRE 16GB (Vulkan, packed) | 28.7 * | **47.8 avg (36.6–53.8)** | 3 | 0.87–0.96 (avg ~0.93) | [@lsunay](https://x.com/lsunay1) (Hermes agent on PC-12) |
-| RTX 5090 32GB (Q4_K_M, 131K) | 76.9 | 155.5 | 2 | 0.50-0.95 | [@anstaendig](https://github.com/anstaendig) |
-| RTX 5090 32GB (UD_Q4_K_XL, 262K) | 74.3 | 179.7 | 4 | 0.35–0.91 | [@anstaendig](https://github.com/anstaendig) |
-| RTX PRO 6000 Blackwell Max-Q 96GB | 45.7 | 97.1 | 2 | 0.52-0.95 | [@awilliamson](https://github.com/awilliamson) |
-| 2× Tesla P40 24GB (tensor split) | 11.7 | 22.6 | 4 | 0.68-0.87 | [@lyesrock](https://github.com/lyesrock) |
-| RTX 5090 32GB (UD-Q5_K_XL, 262K) | 69.6 | 147.5 | 6 | 0.69-0.87 | [@lyesrock](https://github.com/lyesrock) |
-| 2× RTX 5060 Ti 16GB (TP, Q4_K_M) | 38.3 | 76.0 | 3 | 0.43-0.93 | [@mgoswick](https://github.com/mgoswick) |
-| RTX 5090 32GB (UD-Q4_K_XL, 262K, q4_0 KV) | 76.3 | 171.7 | 4 | 0.69-0.87 | [@lyesrock](https://github.com/lyesrock) |
-| 2× Tesla P40 24GB (UD-Q4_K_XL, 262K, q4_0 KV) | 13.2 | 23.4 | 4 | 0.82 | [@lyesrock](https://github.com/lyesrock) |
-| RX 7900 XTX 24GB (Vulkan/RADV) | 28.8 | 70.7 | 3 | 0.43-0.95 | [@Splizard](https://github.com/Splizard) |
-| RTX 3090 24GB (UD-Q2_K_XL, OC) | 52.4 | 85.6 | 2 | 0.76 | [@dcrey7](https://github.com/dcrey7) |
-| RTX 3090 24GB (UD-Q4_K_XL, OC) | 43.9 | 79.6 | 2 | 0.78 | [@dcrey7](https://github.com/dcrey7) |
-| RTX 3060 Ti 8GB + RTX 3080 Ti 12GB (TP, `-sm tensor`) | 39.4 | 49.2 | 2 | 0.895 | [@randyjohnson11](https://github.com/randyjohnson11) |
-| Apple M4 24GB (Metal) | 5.8 | 5.8 | 2 | 0.48-0.95 | [@sternryan](https://github.com/sternryan) |
-| Mac Studio (M3 Ultra, 96GB UMA, Q6_K, Metal) | 22.8 | 24.2 | 2 | 0.53-0.95 | [@adityavsingh](https://x.com/adityavsingh) |
-| RTX 3090 24GB (Q4_K_M, 131K, 250W) | 31.9 | 52.8 | 4 | 0.65 | [@ctaylor83](https://github.com/ctaylor83) |
-| RTX 5090 32GB (UD-Q4_K_XL, 131K, q4_0 KV) | 74.4 | 182.0 | 4 | 0.38-0.90 | [@cmoro-deusto](https://github.com/cmoro-deusto) |
-| RTX 5080 16GB + RTX 3090 24GB (TP) | 55.6 | 92.9 | 2 | 0.51-0.95 | [@plyra](https://x.com/plyra) |
-| RTX 5060 Laptop 8GB | 4.2 | 7.3 | 2 | 0.75-0.97 (0.90 aggregate) | [@ENY66n](https://x.com/ENY66n) |
-| RTX PRO 3000 Blackwell Laptop 12GB | 5.3 | 10.8 | 2 | 0.67-0.93 | [@ENY66n](https://x.com/ENY66n) |
-| RTX 3080 10GB (UD-IQ2_XXS, 16K, headless) | 45.1 | 64.4 | 2 | 0.44-0.93 | [@ntindle](https://github.com/ntindle) |
-| RTX 3080 Ti Laptop 16GB (UD-Q3_K_XL) | 14.8 | 28.6 | 2 | 0.76 | [@salibam99](https://github.com/salibam99) |
-| NVIDIA CMP 170HX 64GB (unlocked HBM2e) | 33.0 | 46.7 | 2 | 0.53-0.94 | [@shiwuxiu](https://github.com/shiwuxiu) |
-| RTX 4090 24GB | 47.0 | 68.8 | 2 | — | [@snakeyjay63-png](https://github.com/snakeyjay63-png) |
-| RTX 4090 24GB (Purusha, LoRA merge) | 47.0 | 83.4 | 2 | — | [@snakeyjay63-png](https://github.com/snakeyjay63-png) |
-| Tesla V100 32GB (Volta) | 33.3 | 48.0 | 2 | 0.75 | [@cameron](https://github.com/cameron) |
-| 2× Tesla V100-SXM2-16GB (Volta, NVLink, layer split) | 35.7 | 59.1 | 4 | 0.33-0.92 | [@ATIVX928](https://github.com/ATIVX928) |
-| RTX 5060 Ti 16GB (Q4-XYZ-v2, 32K) | 26.3 | 59.5 | 4 | 0.34-0.69 | [@jaisusx](https://github.com/jaisusx) |
-| RX 7900 XTX 24GB (Windows/Vulkan) | 41.0 | 85.4 | 3 | 0.47-0.90 (0.73) | [@pparuzel](https://github.com/pparuzel) |
-| 2× RTX A5000 24GB (NVLink, TP) | 51.9 | 81.1 | 2 | 0.56-0.96 | [@TheRiotCoder](https://github.com/TheRiotCoder) |
-| Ryzen AI Max+ 395 / Radeon 8060S 64GB (Linux, Vulkan/RADV) | 11.9 | 28.7 | 4 | 0.30-0.92 | [@Nathanw1014](https://github.com/Nathanw1014) |
-| RTX 5090 32GB (UD-Q4_K_XL **Dynamic 3.0**, 192K) | 74.7 | 160.8 | 4 | 0.86-0.93 | [@paulomcg](https://github.com/paulomcg) |
-| RTX 5080 16GB | 53.4 | 101.3 | 2 | 0.53-0.95 | [@ChumBoxBaron](https://github.com/ChumBoxBaron) |
-| RTX 4060 Ti 16GB (Q4-XYZ-v2, 32K) | 17.6 | 40.0 | 3 | 0.41-0.94 | [@CeIest2](https://github.com/CeIest2) |
-| RX 7900 XTX 24GB (Linux/ROCm 10, UD-Q4_K_M, 131K) | 36.3 | 62.6 | 2 | 0.56-0.94 (0.80) | [@vijay-14](https://github.com/vijay-14) |
-| RTX 5090 32GB (UD-Q4_K_XL Dynamic 3.0, 131K, b10680) | 71.9 | 170.3 | 7 | 0.19-0.85 (0.48 aggregate) | [@hagope](https://github.com/hagope) |
-| RTX 2070 8GB + RTX 5060 Ti 16GB (mismatched Turing+Blackwell, PCIe x1 riser, TP)\* | 25.4 | 41.5 | 2 | 0.81 (0.50-0.96) | [@Lucas12807](https://github.com/Lucas12807) |
-| AMD Radeon 780M iGPU (Phoenix, 32GB UMA) | 4.1 | 8.4 | 2 | 0.50-0.92 (0.77 aggregate) | [@ob7282](https://github.com/ob7282) |
-| AMD Radeon AI PRO R9700 32GB (Windows/Vulkan) | 29.7 | 56.3 | 3 | 0.39-0.97 (0.72) | [@misterkerns](https://github.com/misterkerns) |
-| 2× RTX 5090 32GB (TP, UD-Q4_K_M) | 107.5 | 191.9 | 3 | 0.46-0.93 (0.72 aggregate) | [@Enigmatic331](https://github.com/Enigmatic331) |
-| AMD Instinct MI210 64GB (CDNA2/gfx90a, Q8_0, 32K, f16 KV, custom build) | 30.4 | 46.8 | 8 | 0.375 aggregate | [@pestopoppa](https://github.com/pestopoppa) |
+| Card | Quant | Baseline | With flag | n-max | Acceptance | Contributor |
+|---|---|---|---|---|---|---|
+| RTX 3080 10GB (UD-IQ2_XXS, 16K, headless) | UD-IQ2_XXS | 45.1 | 64.4 | 2 | 0.44-0.93 | [@ntindle](https://github.com/ntindle) |
+| RTX 3090 24GB (UD-Q2_K_XL, OC) | UD-Q2_K_XL | 52.4 | 85.6 | 2 | 0.76 | [@dcrey7](https://github.com/dcrey7) |
+| AMD Radeon 9060 XT 16 GB | AD-IQ3_S/IQ3_XXS | 15.2 | 28.7 | 2 | 0.62-0.93 | [@kdrapel](https://github.com/kdrapel) |
+| RX 7900 GRE 16GB (Vulkan, packed) | IQ3_XXS | 28.7 * | **47.8 avg (36.6–53.8)** | 3 | 0.87–0.96 (avg ~0.93) | [@lsunay](https://x.com/lsunay1) (Hermes agent on PC-12) |
+| RTX 3060 Ti 8GB + RTX 3080 Ti 12GB (TP, `-sm tensor`) | UD-IQ3_XXS | 39.4 | 49.2 | 2 | 0.895 | [@randyjohnson11](https://github.com/randyjohnson11) |
+| Apple M4 24GB (Metal) | UD-Q3_K_XL | 5.8 | 5.8 | 2 | 0.48-0.95 | [@sternryan](https://github.com/sternryan) |
+| RTX 3080 Ti Laptop 16GB (UD-Q3_K_XL) | UD-Q3_K_XL | 14.8 | 28.6 | 2 | 0.76 | [@salibam99](https://github.com/salibam99) |
+| RTX 5080 16GB | Q3_K_M | 53.4 | 101.3 | 2 | 0.53-0.95 | [@ChumBoxBaron](https://github.com/ChumBoxBaron) |
+| RTX 5060 Laptop 8GB | IQ4_XS | 4.2 | 7.3 | 2 | 0.75-0.97 (0.90 aggregate) | [@ENY66n](https://x.com/ENY66n) |
+| RTX PRO 3000 Blackwell Laptop 12GB | IQ4_XS | 5.3 | 10.8 | 2 | 0.67-0.93 | [@ENY66n](https://x.com/ENY66n) |
+| RTX 5060 Ti 16GB (Q4-XYZ-v2, 32K) | Q4-XYZ-v2 | 26.3 | 59.5 | 4 | 0.34-0.69 | [@jaisusx](https://github.com/jaisusx) |
+| RTX 4060 Ti 16GB (Q4-XYZ-v2, 32K) | Q4-XYZ-v2 | 17.6 | 40.0 | 3 | 0.41-0.94 | [@CeIest2](https://github.com/CeIest2) |
+| RTX 4090 24GB | Q4_K_M | 47.7 | 76.3 | 2 | 0.56 | [@Spadav_](https://x.com/Spadav_) |
+| RX 7900 XTX 24GB | Q4_K_M | 30.7 | 43.9 | 2 | 0.60-0.95 | [@Jqianggu](https://x.com/Jqianggu) |
+| RTX 4090 24GB (UD-Q4_K_XL) | UD-Q4_K_XL | 36.1 | 74.8 | 2 | 0.56-0.94 | [@rkvhtd](https://github.com/rkvhtd) |
+| 2x RX 9070 16GB (Vulkan) | UD-Q4_K_XL | 22.1 | 41.6 | 2 | 0.73 | [@tomertec](https://github.com/tomertec) |
+| AMD Radeon AI PRO R9700 32GB | UD-Q4_K_XL | 27.0 | 43.3 | 2 | 0.60-0.94 | [@ajnytebot](https://github.com/ajnytebot) |
+| Ryzen AI Max+ 395 / Radeon 8060S | UD-Q4_K_XL | 11.5 | 23.7 | 2 | 0.52-0.94 | [@shiwuxiu](https://github.com/shiwuxiu) |
+| AMD Radeon 890M iGPU (Strix Point) 48GB UMA | UD-Q4_K_XL | 2.7 | 5.7 | 2 | 0.59-0.91 | [@davidglogan](https://github.com/davidglogan) |
+| RTX PRO 6000 Blackwell 96GB | Q4_K_M | 63.8 | 91.5 | 2 | 0.72-0.81 | [@commdata2338](https://github.com/commdata2338) |
+| RTX 5090 32GB (desktop) | UD-Q4_K_XL | 61.4 | 135.0 | 4 | 0.38-0.87 | [@taco-devs](https://github.com/taco-devs) |
+| RTX 3090 Ti 24GB (Q4_K_M, 128K) | Q4_K_M | 42.0 | 60.9 | 2 | 0.47-0.93 | [@hypertectonic](https://x.com/hypertectonic) |
+| RTX 3090 Ti 24GB (Q4_K_M, 256K) | Q4_K_M | 41.2 | 61.4 | 2 | 0.55-0.94 | [@hypertectonic](https://x.com/hypertectonic) |
+| 3× RTX 3060 12GB (layer split) | UD-Q4_K_XL | 17.3 | 24.5 | 8 | 0.87 | [@EamonMcKiernan05](https://github.com/EamonMcKiernan05) |
+| RTX 3090 24GB (turboquant, n-max 6) | Q4_K_M | 39.8 | 61.5 | 6 | 0.61-0.90 | [@NicholaiVogel](https://github.com/NicholaiVogel) |
+| RTX 3090 24GB (b10450) | Q4_K_M | 41.3 | 63.5 | 2 | 0.69-0.87 | [@hauntedhost](https://github.com/hauntedhost) |
+| GMK EVO-X2, Ryzen AI Max+ 395 (64GB unified, ROCm/HIP) | UD-Q4_K_XL | 10.5-11.1 | 21.4-22.2 | 12 | 0.95-1.0 | [@KyaniteLabs](https://github.com/KyaniteLabs/qwen38-27b-strix-halo) |
+| 2× RTX 5060 Ti 16GB (PP, default `-sm layer`) | UD-Q4_K_XL | 22.1 | 42.8 | 2 | 0.53-0.94 | [@Jackwwg83](https://github.com/Jackwwg83) |
+| 2× RTX 5060 Ti 16GB (TP, `-sm tensor`) | UD-Q4_K_XL | 37.1 | 65.9 | 2 | 0.51-0.88 | [@Jackwwg83](https://github.com/Jackwwg83) |
+| RTX 5090 32GB (desktop) | NVFP4 | 62.7 | **108.7** | 3 | 0.72 | [@jcr211](https://github.com/jcr211) |
+| RTX 5090 32GB (desktop) | UD-Q4_K_XL | 69.3 | 129.1 | 4 | 0.55 | [@paulomcg](https://github.com/paulomcg) |
+| RTX 5090 32GB (Q4_K_M, 131K) | Q4_K_M | 76.9 | 155.5 | 2 | 0.50-0.95 | [@anstaendig](https://github.com/anstaendig) |
+| RTX 5090 32GB (UD_Q4_K_XL, 262K) | UD-Q4_K_XL | 74.3 | 179.7 | 4 | 0.35–0.91 | [@anstaendig](https://github.com/anstaendig) |
+| 2× RTX 5060 Ti 16GB (TP, Q4_K_M) | Q4_K_M | 38.3 | 76.0 | 3 | 0.43-0.93 | [@mgoswick](https://github.com/mgoswick) |
+| RTX 5090 32GB (UD-Q4_K_XL, 262K, q4_0 KV) | UD-Q4_K_XL | 76.3 | 171.7 | 4 | 0.69-0.87 | [@lyesrock](https://github.com/lyesrock) |
+| 2× Tesla P40 24GB (UD-Q4_K_XL, 262K, q4_0 KV) | UD-Q4_K_XL | 13.2 | 23.4 | 4 | 0.82 | [@lyesrock](https://github.com/lyesrock) |
+| RX 7900 XTX 24GB (Vulkan/RADV) | Q4_K_M | 28.8 | 70.7 | 3 | 0.43-0.95 | [@Splizard](https://github.com/Splizard) |
+| RTX 3090 24GB (UD-Q4_K_XL, OC) | UD-Q4_K_XL | 43.9 | 79.6 | 2 | 0.78 | [@dcrey7](https://github.com/dcrey7) |
+| RTX 3090 24GB (Q4_K_M, 131K, 250W) | Q4_K_M | 31.9 | 52.8 | 4 | 0.65 | [@ctaylor83](https://github.com/ctaylor83) |
+| RTX 5090 32GB (UD-Q4_K_XL, 131K, q4_0 KV) | UD-Q4_K_XL | 74.4 | 182.0 | 4 | 0.38-0.90 | [@cmoro-deusto](https://github.com/cmoro-deusto) |
+| RTX 5080 16GB + RTX 3090 24GB (TP) | UD-Q4_K_XL | 55.6 | 92.9 | 2 | 0.51-0.95 | [@plyra](https://x.com/plyra) |
+| NVIDIA CMP 170HX 64GB (unlocked HBM2e) | Q4_K_M | 33.0 | 46.7 | 2 | 0.53-0.94 | [@shiwuxiu](https://github.com/shiwuxiu) |
+| RTX 4090 24GB | Q4_K_M | 47.0 | 68.8 | 2 | — | [@snakeyjay63-png](https://github.com/snakeyjay63-png) |
+| RTX 4090 24GB (Purusha, LoRA merge) | Q4_K_M | 47.0 | 83.4 | 2 | — | [@snakeyjay63-png](https://github.com/snakeyjay63-png) |
+| Tesla V100 32GB (Volta) | Q4_K_M | 33.3 | 48.0 | 2 | 0.75 | [@cameron](https://github.com/cameron) |
+| 2× Tesla V100-SXM2-16GB (Volta, NVLink, layer split) | Q4_K_M | 35.7 | 59.1 | 4 | 0.33-0.92 | [@ATIVX928](https://github.com/ATIVX928) |
+| RX 7900 XTX 24GB (Windows/Vulkan) | UD-Q4_K_XL | 41.0 | 85.4 | 3 | 0.47-0.90 (0.73) | [@pparuzel](https://github.com/pparuzel) |
+| 2× RTX A5000 24GB (NVLink, TP) | Q4_K_M | 51.9 | 81.1 | 2 | 0.56-0.96 | [@TheRiotCoder](https://github.com/TheRiotCoder) |
+| Ryzen AI Max+ 395 / Radeon 8060S 64GB (Linux, Vulkan/RADV) | UD-Q4_K_XL | 11.9 | 28.7 | 4 | 0.30-0.92 | [@Nathanw1014](https://github.com/Nathanw1014) |
+| RTX 5090 32GB (UD-Q4_K_XL **Dynamic 3.0**, 192K) | UD-Q4_K_XL D3.0 | 74.7 | 160.8 | 4 | 0.86-0.93 | [@paulomcg](https://github.com/paulomcg) |
+| RX 7900 XTX 24GB (Linux/ROCm 10, UD-Q4_K_M, 131K) | UD-Q4_K_M | 36.3 | 62.6 | 2 | 0.56-0.94 (0.80) | [@vijay-14](https://github.com/vijay-14) |
+| RTX 5090 32GB (UD-Q4_K_XL Dynamic 3.0, 131K, b10680) | UD-Q4_K_XL D3.0 | 71.9 | 170.3 | 7 | 0.19-0.85 (0.48 aggregate) | [@hagope](https://github.com/hagope) |
+| RTX 2070 8GB + RTX 5060 Ti 16GB (mismatched Turing+Blackwell, PCIe x1 riser, TP)\* | UD-Q4_K_XL | 25.4 | 41.5 | 2 | 0.81 (0.50-0.96) | [@Lucas12807](https://github.com/Lucas12807) |
+| AMD Radeon 780M iGPU (Phoenix, 32GB UMA) | UD-Q4_K_XL | 4.1 | 8.4 | 2 | 0.50-0.92 (0.77 aggregate) | [@ob7282](https://github.com/ob7282) |
+| AMD Radeon AI PRO R9700 32GB (Windows/Vulkan) | UD-Q4_K_XL | 29.7 | 56.3 | 3 | 0.39-0.97 (0.72) | [@misterkerns](https://github.com/misterkerns) |
+| 2× RTX 5090 32GB (TP, UD-Q4_K_M) | UD-Q4_K_M | 107.5 | 191.9 | 3 | 0.46-0.93 (0.72 aggregate) | [@Enigmatic331](https://github.com/Enigmatic331) |
+| RTX 5090 32GB desktop (UD-Q5_K_XL) | UD-Q5_K_XL | 66.3 | 144.2 | 4 | 0.32-0.89 | [@TrickRiggin](https://github.com/TrickRiggin) |
+| 2× Tesla P40 24GB (tensor split) | UD-Q5_K_XL | 11.7 | 22.6 | 4 | 0.68-0.87 | [@lyesrock](https://github.com/lyesrock) |
+| RTX 5090 32GB (UD-Q5_K_XL, 262K) | UD-Q5_K_XL | 69.6 | 147.5 | 6 | 0.69-0.87 | [@lyesrock](https://github.com/lyesrock) |
+| 2× RTX 3090 + 3090 Ti 24GB (TP) | UD-Q6_K_XL | 49.1 | 81.1 | 2 | 0.52-0.96 | [@guilhermedemelocabral](https://github.com/guilhermedemelocabral) |
+| RTX 5090 32GB (Q6_K, 128K) | Q6_K | 61.9 | 130.0 | 2 | 0.52-0.95 | [@hypertectonic](https://x.com/hypertectonic) |
+| RTX 5090 32GB (Q6_K, 256K) | Q6_K | 62.0 | 121.7 | 2 | 0.50-0.95 | [@hypertectonic](https://x.com/hypertectonic) |
+| Mac Studio (M3 Ultra, 96GB UMA, Q6_K, Metal) | Q6_K | 22.8 | 24.2 | 2 | 0.53-0.95 | [@adityavsingh](https://x.com/adityavsingh) |
+| RTX A6000 48GB (Ada) | Q8_K_XL | 26.7 | 52.5 | 2 | 0.54-0.98 | [@lingster](https://github.com/lingster) |
+| RTX PRO 6000 Blackwell Max-Q 96GB | Q8_0 | 45.7 | 97.1 | 2 | 0.52-0.95 | [@awilliamson](https://github.com/awilliamson) |
+| AMD Instinct MI210 64GB (CDNA2/gfx90a, Q8_0, 32K, f16 KV, custom build) | Q8_0 | 30.4 | 46.8 | 8 | 0.375 aggregate | [@pestopoppa](https://github.com/pestopoppa) |
+| RTX 3090 24GB | — | 31.0 | 41.3 | 2 | 0.78 | [@sudoingX](https://x.com/sudoingX) |
+| RTX 5090 mobile 24GB | — | 36.7 | 50.9 | 2 | 0.79 | [@sudoingX](https://x.com/sudoingX) |
+
+**Rows are ordered by weight quant, lowest bits per weight first**, then by the order they were contributed. `Quant` is backfilled from each row's own footnote; two early rows have no quant recorded anywhere and are marked `—`. Quant is not the only thing that varies between rows — context length spans 16K to 262K, KV cache spans f16 / q8_0 / q4_0, and backends span CUDA / ROCm / Vulkan / Metal — so read the footnote before comparing two rows closely.
 
 \* A6000 row: unsloth Q8_K_XL, 256K context, q8_0 KV cache — 40.0 GB VRAM baseline, 41.4 GB with spec (rows above: Q4_K_M, 131K, q4_0 KV).
 \* RX 7900 XTX row: unsloth Q4_K_M, 131K context, q4_0 KV cache — 18.9 GB VRAM baseline, 19.7 GB with spec.
