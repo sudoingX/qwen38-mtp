@@ -200,3 +200,18 @@ n-max 2 is the cleanest depth-matched comparison against the existing Linux RADV
 Acceptance is from `draft acceptance` log lines, warmup excluded. Aggregates: n-max 2 1621/2013 = 0.81, n-max 3 ungated 1863/2593 = 0.72, n-max 3 p-min 0.60 1898/2265 = 0.84, n-max 4 p-min 0.60 1816/2270 = 0.80. Dedicated process VRAM: 20.50 GiB baseline, 22.75 GiB at n-max 4.
 
 **Cookbook / landmines** (same box, documented so nobody re-learns them): the sudoingX launch shape (UD-Q4_K_M, 131K, n-max 2) measured **52.6**, below n-max 3 XL. n-max 6 dropped prose to **27.5**, under the 29.7 baseline. `draft-dflash` without a sidecar GGUF is a silent no-op (29.6). Official `llama-b10740-bin-win-rocm-7.14-x64.zip` loads MTP then decodes at **~5 t/s** — the zip is not a gfx1201 HIP build; do not use it on R9700. Vulkan device string on this Windows driver reports **shared memory 32768** (RADV often 65536). Full hunt log: keep local `LAB.md` with the PR notes.
+
+### 2× AMD Radeon AI PRO R9700 32GB (ROCm/HIP, tensor split): adaptive MTP tops fixed n-max
+*by [@1337hero](https://github.com/1337hero)*
+
+Dual R9700 (64 GB compute pool, desktop GPU excluded from the split), Arch Linux, HIP/gfx1201 backend. llama.cpp at fork point `9113cc188` + [stew675/llama-cpp-rdna-boosts](https://github.com/stew675/llama-cpp-rdna-boosts) blocks 01-14 (adaptive MTP is block 01; the whole set is HIP performance work, and block 14 upstreams qwen4exp support). Q8_0 (Qwen/Qwen3.8-27B upstream GGUF; the file carries no quantizer URL in its metadata), 262K context, f16 KV cache, `--split-mode tensor -ts 1/1`, P2P live (`pci=disable_acs_redir`), `GGML_CUDA_ALLREDUCE=internal`, `--parallel 1`, thinking off. Method: unchanged `probe.py` at `88a2caf5`, three runs x three prompts, warmup discarded. Spec arms add only the spec flags named in the table; acceptance is from the server log.
+
+| arm | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Overall median | Acceptance |
+|---|---|---|---|---|---|
+| off | 29.8 | 29.9 | 29.8 | 29.8 | — |
+| `--spec-type draft-mtp --spec-draft-n-max 2` | 65.1 | 49.5 | 59.0 | 59.0 | 0.50-0.93 |
+| `--spec-type draft-mtp-adaptive` (stew675 block 01, n 2-4) | **78.7** | 48.4 | **67.5** | **67.5** | 0.74 (avg) |
+
+**Adaptive is +127% over baseline vs +98% for fixed n-max 2, and it is not prose-limited the way the single-R9700 Vulkan rows are** — prose sits at ~48-49 on both spec arms while code keeps climbing (bash acceptance runs 0.87-0.93, so adaptive spends its budget there instead of paying full draft cost on prose). The shape matches rule 1: this card is not bandwidth-starved, deep drafting is nearly free on the code half, and per-request adaptive depth captures that without gating.
+
+VRAM delta vs the spec-off arm is ~1.4 GiB per compute card (21.6 → 22.9 of 32 GB). Cross-check on the same serving shape via a llama-swap streaming bench (533-token prompt, 256 out, best-of-3 median, cold prefill): 59.2 t/s — consistent with the probe numbers above. Q8_0 note: this is the same quant family as the MI210 row (Q8_0), not the Q4 quants most table rows use; per-token quality is correspondingly higher at these speeds.
