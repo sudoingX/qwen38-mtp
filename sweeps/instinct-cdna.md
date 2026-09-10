@@ -78,3 +78,76 @@ are therefore honest speed measurements, not identical-output speed claims. The 
 measured server-side on our own harness reads roughly 13% higher, which is the expected direction
 for an end-to-end client instrument that counts per-token delivery. Cross-instrument comparisons of
 speculative decoding should not be made without stating which instrument produced them.
+
+#### Concurrency: how the second drafting path scales past one slot
+*added 2026-09-09 by [@pestopoppa](https://github.com/pestopoppa)*
+
+Everything above is `--parallel 1`, which is what the community table measures. This section
+answers a different question that the table has no column for: **what happens to speculative
+decoding on this card when several users share the slot pool.** It is context, not a table row —
+different instrument, different workload, different drafter, different kernel tip from the section
+above. The method notes below are load-bearing; please read them before quoting any of it.
+
+Same MI210 64 GB (gfx90a, ROCm 6.2), same unsloth `Qwen3.8-27B-Q8_0.gguf`, DFlash drafter
+(`--spec-type draft-dflash --spec-draft-n-max 8`, same resident draft model as above,
+2,056,414,752 B), f16 K/V, `-ngl 99`, `-fa on`, `-b/-ub 2048`, `-c 16384`, `-t 8` pinned to 8
+host cores, greedy sampling (`temp 0`, `top-k 1`), `n_predict 384`, `cache_prompt: false`.
+**Only `-np` is varied**; every other flag is byte-identical across the four points. Three
+separate server launches per point (not three requests against one server), one np-wide warmup
+round discarded per launch, median of the three launches reported. GPU residency verified by
+sampling during the request phase; sclk pinned at 1700 MHz.
+
+| slots (`-np`) | aggregate tok/s | per slot | p95 dev over 3 launches | per-launch | peak VRAM |
+|---:|---:|---:|---:|---|---:|
+| 1 | **79.2** | 79.2 | 0.44% | 79.2, 79.2, 79.6 | 33.1 GiB |
+| 2 | 109.4 | 54.7 | 1.60% | 109.4, 108.9, 111.2 | 34.5 GiB |
+| 4 | 167.8 | 41.9 | 3.33% | 167.8, 162.2, 169.7 | 37.7 GiB |
+| 8 | **179.1** | 22.4 | 1.82% | 182.4, 178.2, 179.1 | 43.1 GiB |
+
+**The curve turns over hard between 4 and 8 slots.** Going from 4 to 8 buys +6.8% aggregate
+throughput and costs each user nearly half their rate (41.9 → 22.4 tok/s). `-np 4` is the
+operating point on this card: 93.7% of peak aggregate while every user still sees ~42 tok/s. If
+you are sizing a shared server around speculative decoding, the useful number is not peak
+aggregate — it is the last slot count before the per-user rate collapses, and here that is 4.
+
+**Read this before you compare a number here to a number anywhere else.**
+
+1. **Each `-np` point runs a DIFFERENT SET OF PROMPTS.** The harness fires one request per slot
+   from a fixed list, so `-np 1` measures prompt #1 alone and `-np 8` measures all eight. Given
+   what the section above establishes about prompt dependence on this card — a 2.4x span at
+   n-max 8 — **the concurrency scaling and the prompt mix are confounded, and this sweep cannot
+   separate them.** The turnover between 4 and 8 is large and monotone across every launch, so we
+   do not think it is a prompt artifact, but the honest statement is that it was not controlled
+   for. A prompt-matched sweep is the experiment that would settle it, and it has not been run.
+   For the same reason the `-np 1` figure here is **not** comparable to the per-prompt columns
+   above: different prompts (reasoning/math, not the py/prose/bash trio), different instrument.
+2. **"Aggregate" here is the sum of the concurrent slots' own decode rates**, taken from each
+   response's `timings.predicted_per_second` — not a wall-clock tokens/second for the batch. That
+   choice deliberately excludes scheduling-tail jitter (which ran 5–10% on wall-clock even at
+   greedy), so it flatters the aggregate relative to what a client would time end-to-end. The
+   per-slot column is a decode rate, not a delivered rate.
+3. **Different instrument from the rest of this page.** Server-side timings, not client-side
+   `probe.py` streaming. The instrument note at the end of the previous section measured that gap
+   at roughly 13% in this direction on the same arm.
+4. **Different kernel tip.** The section above is champion `9e18beb0`; this sweep is
+   `ef81196d5bdd4190b46dff4ae7eecc333a46c8ce`, a later tip with more folded in. Unlike the earlier
+   tip this one is public and rebuildable —
+   [`pestopoppa/llama.cpp`](https://github.com/pestopoppa/llama.cpp), branch
+   `ak/champion/llama-cpp-0db32c06e3e5` — so rule 6 still applies (not stock upstream), but the
+   build is no longer a black box.
+5. **Different drafter.** This is the DFlash block drafter with its own draft model, not the MTP
+   head this repo is about. **No MTP concurrency sweep exists on this hardware**, so nothing here
+   should be read as a statement about what `-np` does to MTP self-drafting.
+
+**On the spread.** p95 deviation across launches is 0.44% at `-np 1` and 3.33% at `-np 4` — but
+it falls back to 1.82% at `-np 8`, so it is **not** monotone in slot count and we will not claim a
+trend from four points at n=3. What the column does establish is that `-np 4` is the least stable
+point measured, roughly 7x the `-np 1` spread: a single reading there is much weaker evidence than
+a single reading at `-np 1`, which is why the per-launch figures are printed. Anyone A/B-ing a
+change at concurrency should state their launch count. (At `-np 8` the clock left its pin briefly,
+1695–1700 MHz, on one launch.)
+
+**The greedy-divergence caveat from the previous section applies unchanged**: a greedy-vs-baseline
+divergence exists in the shared speculative verify path on this platform, affects all speculation
+modes, and is under investigation. These are honest speed measurements, not identical-output
+speed claims.
