@@ -200,3 +200,43 @@ n-max 2 is the cleanest depth-matched comparison against the existing Linux RADV
 Acceptance is from `draft acceptance` log lines, warmup excluded. Aggregates: n-max 2 1621/2013 = 0.81, n-max 3 ungated 1863/2593 = 0.72, n-max 3 p-min 0.60 1898/2265 = 0.84, n-max 4 p-min 0.60 1816/2270 = 0.80. Dedicated process VRAM: 20.50 GiB baseline, 22.75 GiB at n-max 4.
 
 **Cookbook / landmines** (same box, documented so nobody re-learns them): the sudoingX launch shape (UD-Q4_K_M, 131K, n-max 2) measured **52.6**, below n-max 3 XL. n-max 6 dropped prose to **27.5**, under the 29.7 baseline. `draft-dflash` without a sidecar GGUF is a silent no-op (29.6). Official `llama-b10740-bin-win-rocm-7.14-x64.zip` loads MTP then decodes at **~5 t/s** — the zip is not a gfx1201 HIP build; do not use it on R9700. Vulkan device string on this Windows driver reports **shared memory 32768** (RADV often 65536). Full hunt log: keep local `LAB.md` with the PR notes.
+
+
+### AMD Radeon AI PRO R9700 32GB (Windows/Vulkan): plain Q4_0 vs UD-Q4_K_XL
+*by [@misterkerns](https://github.com/misterkerns)*
+
+Same Windows Vulkan stack as the UD-Q4_K_XL row above (WinGet b10711, driver 32.0.22042.14002, 262K, q4_0 KV, `--parallel 1`). The GGUF is unsloth `Qwen3.8-27B-Q4_0.gguf` instead of Dynamic 3.0 UD-Q4_K_XL. Harbor llama-swap was stopped; unchanged `probe.py`. Spec-off and n-max 3 were measured 2026-09-09 on the same box.
+
+| arm | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Overall median | Acceptance |
+|---|---|---|---|---|---|
+| spec-off | 34.3 | 34.3 | 34.2 | **34.2** | — |
+| **n-max 3 ungated** | 74.4 | 48.4 | 61.9 | **61.9** | 0.40-0.90 (0.71) |
+
+**34.2 → 61.9 (+81%).** Spec-off is flat to 0.2 tok/s, the same shape as XL. The flag arm is still the code-up / prose-down split (74.4 / 48.4 / 61.9). Aggregate acceptance 1905/2690 = 0.71, warmup excluded; per-request range 0.40–0.90 (prose is the low end).
+
+Same-card comparison against the XL row (29.7 → 56.3):
+
+| GGUF | spec-off | n-max 3 | file |
+|---|---|---|---|
+| UD-Q4_K_XL Dynamic 3.0 | 29.7 | 56.3 | 16.34 GiB |
+| Q4_0 | 34.2 | 61.9 | 14.94 GiB |
+
+Q4_0 is **+15%** unassisted and **+10%** with the flag. llama-bench on the same binary: Q4_0 tg128 **34.91** / pp512 **932** versus XL 30.50 / 743. Weight bytes explain ~9% (16.34/14.94); the leftover is the INT4 mat-vec path versus mixed K-quant on this AMD Windows driver (`shared memory: 32768`, proprietary LLPC). Decode is still at the bus: 640 GB/s / 14.94 GiB ≈ 42.8 tok/s ceiling, and 34.2 is 80% of that — the same occupancy band as XL's 29.7 / 36.5 (81%).
+
+A 2026-09-03 n-max 3 pass read **64.3** overall (74.4 / 46.0 / 64.3). Python matched today's 74.4; overall moved with bash. The table uses the 2026-09-09 pair because that is the spec-off + spec-on set with an acceptance log, Harbor stopped on both arms.
+
+**Quality vs Dynamic XL, same b10711 binary, Harbor stopped, greedy temp 0 seed 1, spec-off:**
+
+| | XL | Q4_0 |
+|---|---|---|
+| wiki PPL (16×512 chunks) | **7.11 ± 0.28** | 7.20 ± 0.28 |
+| probe-py merge | correct two-pointer | correct two-pointer |
+| mmap vs read | correct | correct |
+| bash watch | polling+comm, has trap | polling+comm, no trap |
+| Stop-HarborGpu | truncated at 450 tok | truncated at 450 tok |
+| JSON-only | `{"name":"Qwen","count":27}` | identical |
+| kth unique | correct + tests | correct + tests |
+
+PPL +1.3% is inside the error bar. Six greedy prompts did not show a Q4_0 collapse. This is still not a long-agent eval, so the row is not a recommendation to abandon UD-Q4_K_XL — it is a driver/kernel observation that plain INT4 is the faster 4-bit file on this proprietary Vulkan stack.
+
+Method: unchanged `probe.py` at `a4c3028`, 3×3, thinking off, warmup discarded, `--parallel 1`. llama.cpp WinGet b10711 (`9723942ad`) win-vulkan-x64. sha256 `ede16c7b…4e671d`.
