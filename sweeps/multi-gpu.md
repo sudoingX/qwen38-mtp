@@ -408,3 +408,45 @@ herring; the metric was the problem.
 **The transferable lesson:** before comparing two engines with a streaming client, check
 tokens-per-chunk on each. One line of `stream_options: {"include_usage": true}` settles
 it, and without it a speculative-decoding gain can read as a loss.
+
+
+### 2× RTX 3060 12GB (tensor split): the n-max sweep, and the lighter file is what buys the context
+
+*by [@sss0lace](https://github.com/sss0lace), PR #81*
+
+One board, two different dies (GA106 + GA104), no NVLink, PCIe x8 Gen3, `-sm tensor -ts 1,1`, both arms `--parallel 1`, q4_0 K and V, thinking off. Every arm ran headless: with the desktop resident this box holds 221 MiB on GPU0, 18 MiB on GPU1 and 2,962 MiB of host RAM; headless with nothing loaded it reads 9 MiB, 1 MiB and 2,132 MiB. Method: `probe.py` unchanged, three sessions per arm of three runs × three prompts, medians. Acceptance is the union range across the three sessions; `—` means speculation was off, so there was nothing to accept.
+
+**64,536 context, both files, every n-max we ran:**
+
+| arm | n-max | p-min | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Acceptance |
+|---|---|---|---|---|---|---|---|
+| `UD-Q4_K_XL` | off | — | 30.0 | 30.0 | 30.0 | 29.9 | — |
+| `UD-Q4_K_XL` | 2 | — | 52.5 | 57.3 | 42.6 | 52.5 | 0.536-0.970 |
+| `UD-Q4_K_XL` | 3 | — | 53.1 | 61.0 | 38.1 | 53.1 | 0.480-0.912 |
+| `UD-Q4_K_XL` | **4** | — | **53.3** | 65.0 | 36.2 | 53.3 | 0.362-0.885 |
+| `UD-Q4_K_XL` | 4 | 0.60 | 38.5 | 57.0 | 25.5 | 38.5 | 0.517-0.965 |
+| `Q4-XYZ-v2` | off | — | 34.2 | 34.2 | 34.2 | 34.1 | — |
+| `Q4-XYZ-v2` | 2 | — | 56.9 | 62.9 | 49.1 | 56.9 | 0.512-0.953 |
+| `Q4-XYZ-v2` | **3** | — | **59.0** | 69.0 | 44.5 | 59.0 | 0.457-0.950 |
+| `Q4-XYZ-v2` | 4 | — | 58.4 | 74.3 | 41.4 | 58.4 | 0.336-0.875 |
+| `Q4-XYZ-v2` | 4 | 0.60 | 46.0 | 63.2 | 27.3 | 46.0 | 0.557-0.876 |
+
+**131,072 context, the lighter file only** — 17.56 GB of weights plus a 131K q4_0 cache does not fit this pair's 24 GB:
+
+| arm | n-max | p-min | Overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Acceptance |
+|---|---|---|---|---|---|---|---|
+| `Q4-XYZ-v2` | off | — | 34.2 | 34.2 | 34.3 | 34.1 | — |
+| `Q4-XYZ-v2` | 2 | — | 56.8 | 62.7 | 47.8 | 56.8 | 0.571-0.958 |
+| `Q4-XYZ-v2` | 3 | — | 57.1 | 68.9 | 44.8 | 57.1 | 0.438-0.942 |
+| `Q4-XYZ-v2` | **4** | — | **58.9** | 73.5 | 41.9 | 58.9 | 0.343-0.882 |
+| `Q4-XYZ-v2` | 4 | 0.60 | 41.5 | 63.5 | 27.1 | 41.5 | 0.533-0.919 |
+
+The flag is worth **+78%** on `UD-Q4_K_XL` at n-max 4 (30.0 → 53.3), **+73%** on `Q4-XYZ-v2` at n-max 3 (34.2 → 59.0) and **+72%** at 131,072 (34.2 → 58.9).
+
+**Depth buys code and sells prose.** On `Q4-XYZ-v2` at 64K, the code prompt climbs 34.2 → 62.9 → 69.0 → **74.3** as n-max goes 2 → 4, while the prose prompt falls 34.2 (spec off) → 49.1 → 44.5 → **41.4**, peaking at the shallowest depth. Acceptance moves with it: 0.512-0.953 at n-max 2 against 0.336-0.875 at n-max 4, so the fastest arm on this rig is the one with the lowest acceptance — rule 2 reproduced on mismatched Ampere dies. The optimum depth also moves: `UD-Q4_K_XL` still gains at n-max 4 (52.5 / 53.1 / 53.3 for 2 / 3 / 4) while `Q4-XYZ-v2` peaks at 3 at 64K (56.9 / **59.0** / 58.4) and at 4 at 131K (56.8 / 57.1 / **58.9**).
+
+**Gating costs more than it buys**, which is why no row above uses it. `--spec-draft-p-min 0.60` at n-max 4 lifted acceptance from 0.362-0.885 to 0.517-0.965 on `UD-Q4_K_XL` and returned 38.5 against 53.3 (−28%); on `Q4-XYZ-v2` it lifted 0.336-0.875 to 0.557-0.876 and returned 46.0 against 58.4 (−21%) at 64K and 41.5 against 58.9 (−30%) at 131K.
+
+**Context is nearly free, the flag is not.** 59.0 at 64K against 58.9 at 131,072 (different n-max, as the tables show). At equal depth the extra context costs 1,088 MiB per GPU in the cache (n-max 3: 8,719 → 9,807 MiB). The flag itself costs 890 MiB per GPU at 64K and 982 MiB at 131K at n-max 4 (8,007 → 8,797 and 8,903 → 9,885 MiB).
+
+On rule 6: these are llama.cpp b10936 (`790cf51aa`). Two numbers below are from the b10615 build and are labelled as such. Context ceiling on this pair, b10615: 163,840 loads, while 196,608 and 262,144 fail in `cudaMalloc`. Split mode, b10615, spec off at 131K with the same file: tensor `1,1` 34.2 against pipeline 20.9 (−39%) and asymmetric `0.85,1.15` 30.5 (−11%), and the flagged arm would not load at 131K in either slower split.
