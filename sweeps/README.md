@@ -7,7 +7,7 @@ Per-card-family deep dives, contributor-authored. The main [README](../README.md
 - [RTX 3090](rtx-3090.md), 7 sections
 - [Radeon (RDNA)](radeon.md), 10 sections
 - [APUs and iGPUs](apu-igpu.md), 4 sections
-- [Multi-GPU rigs](multi-gpu.md), 8 sections
+- [Multi-GPU rigs](multi-gpu.md), 9 sections
 - [Workstation cards](workstation.md), 3 sections
 - [RTX 5060 Ti](rtx-5060-ti.md), 2 sections
 - [RTX 4060 Ti](rtx-4060-ti.md), 2 sections
