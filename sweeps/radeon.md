@@ -254,3 +254,25 @@ A 2026-09-03 n-max 3 pass read **64.3** overall (74.4 / 46.0 / 64.3). Python mat
 PPL +1.3% is inside the error bar. Six greedy prompts did not show a Q4_0 collapse. This is still not a long-agent eval, so the row is not a recommendation to abandon UD-Q4_K_XL — it is a driver/kernel observation that plain INT4 is the faster 4-bit file on this proprietary Vulkan stack.
 
 Method: unchanged `probe.py` at `a4c3028`, 3×3, thinking off, warmup discarded, `--parallel 1`. llama.cpp WinGet b10711 (`9723942ad`) win-vulkan-x64. sha256 `ede16c7b…4e671d`.
+
+
+### RX 7900 XT 20GB (Linux/ROCm/HIP): n-max sweep and the p-min gate
+*by [@sbmthakur](https://x.com/sbmthakur)*
+
+Single RX 7900 XT 20GB (`gfx1100`, 84 CUs, 320-bit / 800 GB/s) — the 20GB cut of Navi 31, one bandwidth step below the XTX (960 GB/s, 96 CUs). Host is a Ryzen 5 7500X3D on Omarchy (Arch-based), kernel 7.1.9-arch1-2, ROCm 7.2.4 with the in-tree amdgpu driver. Server is the distro `llama-server`, HIP build 9733 (`8dba0e9`). Model is the XTX ROCm row's exact file, unsloth `Qwen3.8-27B-UD-Q4_K_M.gguf` (16,464,440,224 B, sha256 `322e194f…23482`), at **65,536 context** with q4_0 K/V, flash attention, all 66 layers on ROCm0, and `--parallel 1`. Headless (Hyprland stopped; 40 MiB VRAM pre-serve), so no rule-7 tax. Context is 64K, not 131K: with the desktop off the card has ~20.0 GiB free and the XTX ROCm row already needs 19.41 GiB with spec at 131K, so 131K would sit on the spill line — 64K keeps ~2.5 GiB of headroom and the flag arm resident.
+
+Method: unchanged `probe.py` at `4227d6c`, and for robustness each arm is **three complete passes** (each pass = one discarded warmup, then three runs of the Python / prose / Bash prompts, 400-token ceiling). The overall figure is the median of the three pass medians; per-prompt cells are the median across passes. Baseline has no spec flags; n-max arms add only `--spec-type draft-mtp --spec-draft-n-max N`; the gated arm adds `--spec-draft-p-min 0.60`. Acceptance is aggregated over the nine measured requests per pass (warmups excluded), range is per request.
+
+| arm | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Overall median | Acceptance |
+|---|---|---|---|---|---|
+| spec-off | 30.8 | 30.9 | 30.7 | 30.8 | — |
+| **n-max 2** | 57.4 | **41.9** | 54.0 | **54.0** | 0.53-0.96 (0.80) |
+| n-max 3 | 63.4 | 38.5 | **54.7** | 54.7 | 0.36-0.93 (0.72) |
+| n-max 4 | **65.0** | 34.9 | 53.1 | 53.1 | 0.31-0.89 (0.64) |
+| n-max 4, p-min 0.60 | 64.7 | 39.2 | 51.3 | 51.3 | 0.53-0.96 (0.79) |
+
+**The mixed-workload optimum is n-max 2–3, and it is a plateau, not a peak: 54.0 / 54.7 / 53.1 overall are inside pass noise of each other.** The same shape as both XTX rows drives it — code keeps climbing with depth (57.4 → 63.4 → 65.0) while prose falls at every extra slot (41.9 → 38.5 → 34.9) and its acceptance collapses (0.80 → 0.72 → 0.64 aggregate). n-max 3 edges n-max 2 by 0.7 tok/s on the strength of code and Bash, but prose is already 3.4 tok/s slower there; n-max 4 is past the optimum on everything but Python. The table row is **n-max 2** — the safe mixed-load choice, matching the XTX ROCm row (rule 1: 24GB-class cards peak at 2, and the 20GB XT lands the same).
+
+**p-min 0.60 buys nothing on this card.** Gating the n-max 4 drafts restores acceptance to 0.79 aggregate (0.53–0.96, back to the n-max 2 range) and pulls prose up from 34.9 to 39.2 — but overall throughput *drops* to 51.3, below both ungated n-max 4 (53.1) and the n-max 2 row (54.0). That is rule 2 exactly: p-min helps starved cards and hurts fast ones; the 2×9070 pool needed it, and — like the R9700 and the 5090s — this 20GB RDNA3 card does not. There is no p-min setting that beats plain n-max 2 here.
+
+All weights stayed resident across the sweep: spec-off/n2/n3/n4 used 16.76 / 17.48 / 17.62 / 17.77 GiB VRAM after load (~150 MiB per extra draft slot), GTT flat at 21 MiB throughout, no spill on a card that reports ~20.0 GiB. Baseline reran to 30.8 after the flag arms (0% drift). Against the XTX ROCm row's paired delta (36.3 → 62.6, +72.5% at n-max 2 on the same file and backend), the XT's 30.8 → 54.0 (+75%) tracks its ~83% bandwidth ratio on both arms — the speedup is silicon-independent, the absolute numbers scale with the bus.
