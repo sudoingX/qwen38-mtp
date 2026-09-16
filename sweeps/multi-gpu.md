@@ -450,3 +450,161 @@ The flag is worth **+78%** on `UD-Q4_K_XL` at n-max 4 (30.0 → 53.3), **+73%** 
 **Context is nearly free, the flag is not.** 59.0 at 64K against 58.9 at 131,072 (different n-max, as the tables show). At equal depth the extra context costs 1,088 MiB per GPU in the cache (n-max 3: 8,719 → 9,807 MiB). The flag itself costs 790 MiB per GPU at 64K and 982 MiB at 131K at n-max 4 (8,007 → 8,797 and 8,903 → 9,885 MiB).
 
 On rule 6: these are llama.cpp b10936 (`790cf51aa`). Two numbers below are from the b10615 build and are labelled as such. Context ceiling on this pair, b10615: 163,840 loads, while 196,608 and 262,144 fail in `cudaMalloc`. Split mode, b10615, spec off at 131K with the same file: tensor `1,1` 34.2 against pipeline 20.9 (−39%) and asymmetric `0.85,1.15` 30.5 (−11%), and the flagged arm would not load at 131K in either slower split.
+
+<a id="dual-rtx-5070-ti"></a>
+
+### 2× RTX 5070 Ti 16GB: tensor splitting, draft length, cache, long inputs, and concurrency
+
+*by [@saltzberg](https://github.com/saltzberg), measured 2026-09-16*
+
+**The matched three-repeat confirmation reaches 69.7 → 140.5 tok/s overall median with MTP n-max 6.** The combined rate across all three workloads is 69.7 → 126.7 tok/s (1.82×). These are different summaries of the same requests: the median favors the two code tasks, while the combined rate also accounts for time spent on the slower prose task. This uses a custom method, so absolute speeds are not directly comparable with stock `probe.py` rows.
+
+#### Hardware, model, and shared configuration
+
+- Two RTX 5070 Ti 16GB GPUs, stock 300 W limits, PCIe 5.0 ×8 each under load, PHB topology, no NVLink. Ryzen 9 9900X (12 cores / 24 threads), approximately 60 GiB OS-visible system RAM.
+- Ubuntu 24.04.4, NVIDIA driver 580.173.02, [official llama.cpp b10990](https://github.com/ggml-org/llama.cpp/releases/tag/b10990), commit `72b590d65`, Ubuntu x64 CUDA 12.8 binary/runtime. This binary uses internal AllReduce (no NCCL) and logs CPU sampling fallback with tensor splitting.
+- [unsloth/Qwen3.8-27B-GGUF](https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/tree/4ca720788d1e01f1bff70c033e0d0028fd02e502), `Qwen3.8-27B-UD-Q4_K_XL.gguf`, 17,559,178,144 bytes; SHA-256 `3f227079003add2511437e5b1e94812e363385225bf6a9b47b0054a72bc8b01e`. The file contains `qwen35.nextn_predict_layers=1` and the MTP tensors. Model and release archive checksums were verified. Text-only inference; no vision projector.
+- Full GPU offload, tensor split 1:1, Flash Attention on, batch 2048, microbatch 512, 12 CPU and batch threads. Main-table pair: 32,768 context, one slot, F16 K/V. Draft K/V defaults are F16; draft minimum 0; p-min 0 unless explicitly stated.
+
+Shared launch command for the main-table pair (model/runtime paths depend on installation):
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 llama-server \
+  -m Qwen3.8-27B-UD-Q4_K_XL.gguf \
+  --host 127.0.0.1 --port 18089 \
+  -ngl 999 -sm tensor -ts 1,1 -c 32768 -np 1 \
+  -fa on -ctk f16 -ctv f16 -b 2048 -ub 512 -t 12 -tb 12 \
+  --fit off --cache-ram 0 --jinja --no-webui \
+  --spec-type none
+```
+
+For MTP, replace only `--spec-type none` with `--spec-type draft-mtp --spec-draft-n-max 6 --spec-draft-p-min 0`.
+
+#### Method and three-repeat confirmation
+
+A standard-library HTTP client renders one user message with `/apply-template`, using `enable_thinking=false` and `reasoning_effort=medium`, then streams `/completion`. Request parameters are `n_predict=512`, `temperature=0`, `seed=42`, `top_k=20`, `top_p=0.95`, `min_p=0`, `repeat_penalty=1`, `presence_penalty=0`, `ignore_eos=false`, `cache_prompt=false`, `return_tokens=true`, and `stream=true`. There is no system message. Each server receives one excluded 64-token warmup: “Explain in a few sentences why reproducible measurements matter.” Then Python, prose, Bash run in that order, repeated three times. Baseline is measured first, then MTP.
+
+This differs from unchanged `probe.py`: longer prompts below, a 512-token cap, explicit greedy sampling, no prompt reuse, and **server token/timing counters instead of SSE-event counts**. Generation speed is `timings.predicted_per_second`, whose timed interval excludes the first generated token. Overall median pools the nine request rates; combined rate is total server-timed decode tokens / total decode seconds. TTFT is client request start to first token ID; prompt formatting is outside that clock. Every measured confirmation request generated exactly 512 tokens; streamed IDs matched server counts and cached-token counts were zero. Output text repeated within each arm but differed between baseline and MTP for all three workloads, even with greedy decoding; this is a throughput comparison, not evidence of exact-output equivalence.
+
+| Workload | Baseline runs (tok/s) | Baseline median (tok/s) | MTP-6 runs (tok/s) | MTP-6 median (tok/s) |
+|---|---|---|---|---|
+| Python | 69.84, 69.69, 69.70 | 69.70 | 141.34, 140.46, 140.44 | 140.46 |
+| Prose | 69.78, 69.70, 69.68 | 69.70 | 104.46, 104.36, 104.23 | 104.36 |
+| Bash | 69.73, 69.69, 69.70 | 69.70 | 143.30, 143.23, 143.10 | 143.23 |
+
+Acceptance: **3,331/7,563 = 0.440**, per-request range 0.330–0.523; warmups excluded. The main table uses this fresh confirmation, not the earlier two-repeat sweep.
+
+| Metric | Baseline | MTP-6 |
+|---|---|---|
+| Overall median (tok/s) | 69.70 | 140.46 |
+| Combined generation (tok/s) | 69.72 | 126.74 |
+| Median TTFT (ms) | 145.0 | 156.7 |
+| Peak total GPU memory (GiB) | 18.48 | 20.20 |
+| Mean GPU power, both cards (W) | 522 | 482 |
+| Peak GPU temperatures, GPU0/GPU1 (°C) | 72/68 | 73/67 |
+
+GPU telemetry was sampled approximately every 0.5 s during requests. Power is for the two GPUs only, averaged by request wall time; it is not wall-socket power. Memory is the sampled peak across both GPUs. No thermal-limit observations occurred in the confirmation.
+
+<details>
+<summary>Exact short-workload prompts</summary>
+
+**Python**
+
+> Write a complete Python 3 module using only the standard library that implements a thread-safe LRU cache with per-entry time-to-live, a maximum entry count, get, put, delete, clear, and cache statistics. Explain eviction semantics in docstrings. Include at least six unittest cases covering expiry, replacement, eviction order, a missing key, clearing, and concurrent access. Return the complete implementation and tests in one code block.
+
+**Prose**
+
+> Write a detailed technical guide of at least 1200 words explaining how to design a reproducible data processing pipeline for a collection of CSV experimental results. Cover input validation, units, missing values, duplicate records, provenance, outliers, versioning, error recovery, and tests. Give concrete examples and discuss tradeoffs. Use clear section headings.
+
+**Bash**
+
+> Write a complete, well-commented Bash script that incrementally backs up a chosen source directory to a destination using rsync. Include argument parsing, help, dry-run mode, exclusion patterns, checking dependencies and paths, preventing overlapping runs with flock, timestamped logs, exit status handling, signal cleanup, and careful quoting for paths containing spaces. Follow the script with example invocations and an explanation of the failure cases.
+
+</details>
+
+#### Exploratory split, draft-length, and cache sweeps
+
+The following are the **earlier two-repeat screens** (six requests per short-workload configuration), kept separate from the three-repeat main-table confirmation. All rates in the next three tables are **combined generation tok/s**, not medians. One excluded warmup per server; core configuration order shuffled with seed 42. Same 512-token greedy suite and controls above, changing only the displayed settings. These small samples identify candidates for confirmation, not statistically resolved rankings.
+
+Q8_0 main K/V, 32K context, one slot:
+
+| Split | n-max | Combined (tok/s) | Peak total VRAM (GiB) |
+|---|---|---|---|
+| layer | off | 42.75 | 17.83 |
+| layer | 2 | 64.62 | 18.91 |
+| layer | 3 | 64.65 | 19.06 |
+| layer | 4 | 58.05 | 19.21 |
+| tensor | off | 67.94 | 17.71 |
+| tensor | 2 | 98.68 | 18.84 |
+| tensor | 3 | 97.35 | 18.98 |
+| tensor | 4 | 88.47 | 19.14 |
+
+Tensor split, Q8_0, additional draft lengths (the repeat of n-max 2 is a separate warm confirmation):
+
+| n-max | Combined (tok/s) | Aggregate acceptance |
+|---|---|---|
+| 1 | 88.31 | 0.876 |
+| 2 | 98.04 | 0.746 |
+| 5 | 98.44 | 0.535 |
+| 6 | 117.97 | 0.412 |
+| 8 | 112.36 | 0.354 |
+| 12 | 97.21 | 0.246 |
+
+Tensor split, main-cache precision and confidence gate (draft cache remains F16):
+
+| Main K/V | n-max | p-min | Combined (tok/s) | Aggregate acceptance | Peak total VRAM (GiB) |
+|---|---|---|---|---|---|
+| q4_0 | off | 0 | 64.78 | — | 17.21 |
+| q4_0 | 2 | 0 | 94.45 | 0.719 | 18.34 |
+| f16 | off | 0 | 68.80 | — | 18.48 |
+| f16 | 2 | 0 | 101.64 | 0.775 | 19.61 |
+| f16 | 6 | 0 | 126.77 | 0.441 | 20.20 |
+| q8_0 | 2 | 0.60 | 79.05 | 0.847 | 18.84 |
+
+Best tested short-workload setting: tensor/F16/n-max 6. This is not an exhaustive optimum (7 was not tested). On Q8, the p-min 0.60 gate increased acceptance but reduced speed. F16 improved the leading candidate; Q4_0 saved memory without increasing speed. The layer/Q8 baseline to tensor/F16/MTP comparison changes three settings and must not be presented as an isolated MTP gain.
+
+#### Exploratory non-thinking sampling
+
+Same three workloads, two repeats each, F16 K/V; temperature 0.7, top-p 0.8, top-k 20, min-p 0, presence penalty 1.5, repeat penalty 1, seed 42. Combined rates: **67.0 / 91.2 / 106.5 tok/s** for MTP off / n-max 2 / n-max 6. Sampled output text can differ between configurations; these are throughput observations, not identical-output latency comparisons.
+
+#### Real long inputs: faster decode can still mean a slower request
+
+Tensor split, Q8_0 K/V, 131,072 allocated context, one slot, greedy, 512 output tokens, **two repeats per cell**. Synthetic laboratory records are actually processed with prompt caching disabled. Input counts below include the chat template and final instruction; these are not short prompts inside a large empty context. Generation, TTFT, and whole-request values are medians of the two repeats.
+
+| Input tokens | Draft tokens | Generation (tok/s) | TTFT (s) | Whole request (s) | Peak VRAM (GiB) |
+|---|---|---|---|---|---|
+| 4156 | 0 | 65.7 | 1.90 | 9.67 | 21.86 |
+| 4156 | 2 | 90.7 | 2.03 | 7.67 | 23.51 |
+| 4156 | 6 | 100.0 | 2.04 | 7.15 | 24.09 |
+| 16444 | 0 | 62.4 | 7.29 | 15.48 | 21.86 |
+| 16444 | 2 | 87.0 | 7.73 | 13.61 | 23.51 |
+| 16444 | 6 | 101.5 | 7.75 | 12.78 | 24.09 |
+| 65595 | 0 | 52.4 | 33.21 | 42.97 | 21.86 |
+| 65595 | 2 | 71.5 | 35.31 | 42.46 | 23.51 |
+| 65595 | 6 | 80.1 | 35.61 | 42.00 | 24.09 |
+| 122940 | 0 | 44.3 | 72.80 | 84.34 | 21.86 |
+| 122940 | 2 | 61.2 | 77.43 | 85.78 | 23.51 |
+| 122940 | 6 | 62.0 | 77.94 | 86.19 | 24.09 |
+
+At 122,940 input tokens, MTP-6 increased generation from 44.3 to 62.0 tok/s but increased whole-request latency from 84.34 to 86.19 s. For this 512-token response the prefill overhead exceeded decode savings. Long-context conclusions depend on both input and output length.
+
+#### Concurrent requests: the gain persists at four on this build
+
+Tensor split, F16 K/V, greedy; two or four simultaneous requests, matching `--parallel 2/4`, with 32,768 context per slot (total `-c 65536/131072`). Two groups per configuration; each response capped at 512 tokens. Workloads are Python/prose at two active requests, Python/prose/Bash/Python at four. Aggregate throughput is total generated tokens / total group wall time, including prompt processing, not the sum of individual stream rates. Stream rate and TTFT are the medians of the two group medians; VRAM is the sampled peak across both GPUs.
+
+| Active requests | Draft tokens | Aggregate (tok/s) | Median stream (tok/s) | Median TTFT (s) | Peak VRAM (GiB) |
+|---|---|---|---|---|---|
+| 2 | 0 | 104.2 | 53.4 | 0.245 | 20.62 |
+| 2 | 6 | 171.1 | 97.1 | 0.281 | 23.37 |
+| 4 | 0 | 147.8 | 38.2 | 0.476 | 24.92 |
+| 4 | 6 | 231.0 | 74.8 | 0.558 | 29.76 |
+
+The observed MTP benefit at four concurrent requests is specific to this host, build, and workload; it does not establish a universal concurrency crossover. The four-request MTP arm used 29.76 GiB total GPU memory, leaving limited headroom.
+
+#### Reasoning screens and limits
+
+With F16 K/V, temperature 1.0, top-p 0.95, top-k 20, presence penalty 0, seed 42, and medium reasoning effort, a laboratory scheduling problem reached combined **68.9 / 105.4 / 170.5 tok/s** for MTP off / n-max 2 / n-max 6. These were two 2,048-token runs per arm; all hit the cap before the final answer.
+
+A separate **single-run completion screen** per arm, with an 8,192-token budget, finished with EOS: baseline 6,074 tokens at 68.2 tok/s in 89.15 s; MTP-6 5,613 tokens at 166.1 tok/s in 33.96 s. Both returned a feasible 280-minute schedule and matching lower bound on manual review. Output lengths differ, so the wall-time ratio is not a fixed-work speedup or a broad quality result.
+
+The original exploration contains 194 measured requests across 35 arms; the fresh main-table confirmation adds 18 requests across two arms. There were no failed configurations or cached-prompt requests. One original EOS-terminated reasoning baseline reported 6,074 server tokens versus 6,073 streamed token IDs; that discrepancy is retained, and rates consistently use server timings. All fixed-length runs matched counts exactly. Generated code was not executed, and capped outputs are performance workloads, not complete-code correctness tests. No thermal-limit observations were recorded in the follow-up phases; the initial core phase recorded temperature/clock samples and a separate no-throttling spot check. GPU power-limit activity was logged with stock power caps left enabled.
