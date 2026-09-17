@@ -608,3 +608,104 @@ With F16 K/V, temperature 1.0, top-p 0.95, top-k 20, presence penalty 0, seed 42
 A separate **single-run completion screen** per arm, with an 8,192-token budget, finished with EOS: baseline 6,074 tokens at 68.2 tok/s in 89.15 s; MTP-6 5,613 tokens at 166.1 tok/s in 33.96 s. Both returned a feasible 280-minute schedule and matching lower bound on manual review. Output lengths differ, so the wall-time ratio is not a fixed-work speedup or a broad quality result.
 
 The original exploration contains 194 measured requests across 35 arms; the fresh main-table confirmation adds 18 requests across two arms. There were no failed configurations or cached-prompt requests. One original EOS-terminated reasoning baseline reported 6,074 server tokens versus 6,073 streamed token IDs; that discrepancy is retained, and rates consistently use server timings. All fixed-length runs matched counts exactly. Generated code was not executed, and capped outputs are performance workloads, not complete-code correctness tests. No thermal-limit observations were recorded in the follow-up phases; the initial core phase recorded temperature/clock samples and a separate no-throttling spot check. GPU power-limit activity was logged with stock power caps left enabled.
+
+<a id="dual-rtx-5070-ti-stock-probe"></a>
+
+#### Unchanged `probe.py` follow-up (2026-09-17)
+
+Follow-up to the [request on PR #82](https://github.com/sudoingX/qwen38-mtp/pull/82#issuecomment-5700761486): the exact stock client on the same pair of GPUs and serving configuration. **70.0 → 142.5 tok/s (+103.6%)** with MTP n-max 6. The earlier custom-method row remains unchanged.
+
+The script is byte-for-byte identical to [`probe.py` at `51187204b`](https://github.com/sudoingX/qwen38-mtp/blob/51187204b553478ab5a2b4c69cb4fbb5d67197e8/probe.py), SHA-256 `d9ea0c9fb10435937c774d4b182a6b5ac8481837e8b3d1aa23738eeb178dfd5f`. It ran directly as a separate Python process against `http://127.0.0.1:18089`, with no proxy, client patches, sampling overrides, or extra requests during a timed pass. Each invocation includes its own excluded 40-token warmup, then three runs of each of its three original prompts, capped at 400 tokens with thinking disabled. There are **three complete invocations per arm: 27 measured requests plus three warmups**, baseline first, then MTP-6; a fresh server is started for each arm and remains running across its three passes. The table uses the median of the three printed overall medians. Probe output is printed to one decimal place and retained at that precision.
+
+Both launch commands exactly match the earlier confirmation: same UD-Q4_K_XL file, b10990 binary, tensor split 1:1, 32,768 context, F16 main/draft K/V, full GPU offload, Flash Attention, batch 2048, microbatch 512, 12 CPU/batch threads, `--parallel 1`, `--fit off`, `--cache-ram 0`. Baseline is `--spec-type none`; the other arm uses `--spec-type draft-mtp --spec-draft-n-max 6 --spec-draft-p-min 0`. No clocks, power limits, drivers, or binaries were changed.
+
+The unchanged client leaves sampling to the server: saved defaults are temperature 1.0, top-k 20, top-p 0.95, min-p 0.05, repeat penalty 1, presence penalty 0, and no fixed client seed. It also leaves per-request prompt caching at its default, unlike the earlier custom client; the server log shows prefix reuse. `--cache-ram 0` disables the separate RAM prompt cache, not all reuse within a live slot.
+
+##### Pass results
+
+The server columns below come from decode timing lines for the **same nine measured requests** in each stock-client pass. Warmup timing and draft counts are excluded. They are not additional runs of the custom benchmark.
+
+| Arm | Pass | Probe overall median (tok/s) | Server decode median (tok/s) | Accepted / proposed |
+|---|---|---|---|---|
+| off | 1 | 70.0 | 69.71 | — |
+| off | 2 | 70.1 | 69.62 | — |
+| off | 3 | 69.8 | 69.58 | — |
+| MTP-6 | 1 | 142.5 | 142.09 | 2005 / 3878 |
+| MTP-6 | 2 | 157.0 | 157.00 | 1762 / 3228 |
+| MTP-6 | 3 | 137.3 | 136.93 | 1908 / 3718 |
+
+| Arm | Python (tok/s) | Prose (tok/s) | Bash (tok/s) | Peak total VRAM (GiB) | Mean GPU power, both (W) |
+|---|---|---|---|---|---|
+| off | 70.0 | 70.1 | 69.8 | 18.47 | 516 |
+| MTP-6 | 199.2 | 86.6 | 142.5 | 20.18 | 464 |
+
+Per-prompt speeds are medians of the three per-pass prompt medians. MTP acceptance is **5,675/10,824 = 0.524**, per-request range 0.198–0.858, excluding warmups. GPU memory and power are sampled over complete probe passes (including their warmups and client gaps); power excludes the rest of the machine. No failed passes or thermal-limit observations.
+
+##### Comparing methods
+
+| Measurement | Baseline (tok/s) | MTP-6 (tok/s) |
+|---|---|---|
+| Earlier custom prompts, greedy, 512-token cap; server median | 69.7 | 140.5 |
+| Stock prompts/default sampling, 400-token cap; client median | 70.0 | 142.5 |
+| Same stock requests; server median | 69.62 | 142.09 |
+
+The two stock-request clocks can be compared directly here. Their median-of-pass-medians differ by less than 0.6%; the server value is slightly lower in both arms on this run. This comparison does not show a large server-clock uplift. The earlier custom result also changes prompts, sampling, output lengths, request API, and cache policy, so its difference from the stock row cannot be attributed solely to the clock. Stock rates count streamed text deltas and time their arrival after the first delta; server rates use the server decode interval and its token accounting. Neither column measures full end-to-end request throughput.
+
+<details>
+<summary>Unchanged probe stdout, all six passes</summary>
+
+**Baseline, pass 1**
+
+```text
+  70.0 tok/s median | runs: [70.0, 70.1, 69.9] | write a python function that merges two sorted lis
+  70.1 tok/s median | runs: [70.2, 70.1, 70.1] | explain the difference between mmap and read for l
+  69.8 tok/s median | runs: [69.8, 69.8, 69.8] | write a bash script that watches a directory and p
+OVERALL: mean 70.0 median 70.0
+```
+
+**Baseline, pass 2**
+
+```text
+  70.1 tok/s median | runs: [70.1, 70.1, 69.8] | write a python function that merges two sorted lis
+  70.1 tok/s median | runs: [70.1, 70.1, 70.1] | explain the difference between mmap and read for l
+  69.8 tok/s median | runs: [69.8, 69.8, 69.8] | write a bash script that watches a directory and p
+OVERALL: mean 70.0 median 70.1
+```
+
+**Baseline, pass 3**
+
+```text
+  69.8 tok/s median | runs: [69.8, 69.8, 70.1] | write a python function that merges two sorted lis
+  70.0 tok/s median | runs: [70.0, 70.0, 70.0] | explain the difference between mmap and read for l
+  69.8 tok/s median | runs: [69.8, 69.8, 69.8] | write a bash script that watches a directory and p
+OVERALL: mean 69.9 median 69.8
+```
+
+**MTP-6, pass 1**
+
+```text
+ 199.2 tok/s median | runs: [189.7, 206.2, 199.2] | write a python function that merges two sorted lis
+  94.5 tok/s median | runs: [85.0, 94.5, 95.1] | explain the difference between mmap and read for l
+ 142.5 tok/s median | runs: [150.9, 142.5, 125.4] | write a bash script that watches a directory and p
+OVERALL: mean 143.1 median 142.5
+```
+
+**MTP-6, pass 2**
+
+```text
+ 194.3 tok/s median | runs: [196.5, 194.3, 190.4] | write a python function that merges two sorted lis
+  86.6 tok/s median | runs: [84.2, 86.6, 94.6] | explain the difference between mmap and read for l
+ 157.0 tok/s median | runs: [157.0, 166.9, 156.4] | write a bash script that watches a directory and p
+OVERALL: mean 147.4 median 157.0
+```
+
+**MTP-6, pass 3**
+
+```text
+ 205.6 tok/s median | runs: [207.7, 193.1, 205.6] | write a python function that merges two sorted lis
+  78.7 tok/s median | runs: [78.7, 76.5, 95.9] | explain the difference between mmap and read for l
+ 137.3 tok/s median | runs: [133.4, 150.3, 137.3] | write a bash script that watches a directory and p
+OVERALL: mean 142.1 median 137.3
+```
+
+</details>
