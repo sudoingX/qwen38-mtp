@@ -276,3 +276,37 @@ Method: unchanged `probe.py` at `4227d6c`, and for robustness each arm is **thre
 **p-min 0.60 buys nothing on this card.** Gating the n-max 4 drafts restores acceptance to 0.79 aggregate (0.53–0.96, back to the n-max 2 range) and pulls prose up from 34.9 to 39.2, but overall throughput *drops* to 51.3, below both ungated n-max 4 (53.1) and the n-max 2 row (54.0). That is rule 2 exactly: p-min helps starved cards and hurts fast ones; the 2×9070 pool needed it, and, like the R9700 and the 5090s, this 20GB RDNA3 card does not. There is no p-min setting that beats plain n-max 2 here.
 
 All weights stayed resident across the sweep: spec-off/n2/n3/n4 used 16.76 / 17.48 / 17.62 / 17.77 GiB VRAM after load (~150 MiB per extra draft slot), GTT flat at 21 MiB throughout, no spill on a card that reports ~20.0 GiB. Baseline reran to 30.8 after the flag arms (0% drift). Against the XTX ROCm row's paired delta (36.3 → 62.6, +72.5% at n-max 2 on the same file and backend), the XT's 30.8 → 54.0 (+75%) tracks its ~83% bandwidth ratio on both arms, the speedup is silicon-independent, the absolute numbers scale with the bus.
+
+
+### RX 7900 XTX 24GB (Linux/ROCm/HIP) at the full 262K window: n-max/p-min sweep, and MTP at 240K fill
+*by [@victoralcazardev](https://github.com/victoralcazardev)*
+
+Same card, GGUF and serving config as the 262K q8_0/q5_1 row: ISTA-DASLab GSQ-RCO IQ3_S-mtp, 262,144 context, K q8_0 / V q5_1, `-ub 256`, llama.cpp b11160 HIP (gfx1100, built with the q8_0-q5_1 FlashAttention kernel). This config is a daily driver for a coding agent, chosen to fit the whole native window next to the MTP head on 24 GB, so the question here is what the flag is worth where that agent actually works: deep in the context, not at an empty one.
+
+**Empty context, unchanged `probe.py` at `1e514a8`**, three complete passes per arm, the figure is the median of the three pass medians, acceptance warmups excluded:
+
+| arm | P1 code (py) | P2 prose (mmap) | P3 code (bash) | Overall | Acceptance |
+|---|---|---|---|---|---|
+| spec-off | 36.9 | 37.3 | 37.1 | 37.2 | — |
+| n-max 2 | 76.5 | **59.3** | 68.6 | 68.6 | 0.51-0.95 (0.80) |
+| **n-max 3** | 82.1 | 51.9 | **68.9** | **68.9** | 0.38-0.95 (0.72) |
+| n-max 4 | **87.1** | 46.3 | 66.9 | 66.9 | 0.31-0.92 (0.62) |
+| n-max 3, p-min 0.60 | 78.2 | 46.7 | 66.2 | 66.2 | 0.64-0.97 (0.85) |
+| n-max 3, p-min 0.75 | 79.2 | 45.1 | 59.8 | 59.8 | 0.77-0.99 (0.91) |
+
+The shape matches both XTX rows and the 7900 XT: code keeps climbing with depth, prose falls at every extra slot, and n-max 2 and 3 are a plateau (68.6 vs. 68.9 is inside the ±2 tok/s pass spread). p-min raises acceptance and costs throughput at both gates, rule 2's fast-card shape.
+
+**240K fill, same server flags.** This part is **not** `probe.py`, because probe.py never leaves an empty context. It uses a local harness instead: a 239,983-token wikitext document with three instructions appended (essay / literal copy / Python code), temperature 0, 400 output tokens, one server per arm. Each task gets one prefill request (discarded) and then three warm repetitions reusing the cached prefix. Figures are the medians of those three, and the warm spread was ≤ 0.4 tok/s in every cell.
+
+| arm | essay | copy | code | mean | Acceptance |
+|---|---|---|---|---|---|
+| spec-off, q8_0/q5_1 KV | 11.1 | 11.2 | 11.2 | 11.2 | — |
+| **n-max 3, q8_0/q5_1 KV** | **24.2** | **27.0** | **18.8** | **23.3 (+109%)** | 0.69 (code 0.50, copy 0.87) |
+| spec-off, q8_0/q8_0 KV (control) | 14.9 | 14.9 | 15.0 | 14.9 | — |
+
+Two things this adds to the table:
+
+- **The gain grows with depth instead of fading.** +85% at an empty context, **+109% at 240K fill**. If you run long agent sessions, the empty-context row understates what the flag is worth to you. Telemetry on the spec-off arm ruled out the obvious artifacts: memory clock pinned at its 1,249 MHz maximum, 166-208 W against the 272 W cap, 0 evicted bytes, GTT flat.
+- **Your V-cache type moves the baseline more than you'd think.** At the same depth, on the same build, spec-off with V q5_1 decodes 25% slower than with V q8_0 (11.2 vs. 14.9). On gfx1100 with quantized KV, a 1-token decode runs the FlashAttention VEC kernel, which dequantizes K/V in place. MTP's 4-token verify batches go through the TILE kernel instead, which converts the KV to f16 per step (kernel choice read from `ggml_cuda_get_best_fattn_kernel` in `fattn.cu` at b11160). The likely reading is that the q5_1 dequant cost mostly lands on the spec-off arm, but that is a hypothesis: MTP with q8_0/q8_0 KV at 262K has not run reliably on this card (a GPU memory-access fault during a deep prefill), so the with-MTP cost of V q5_1 is not isolated. The practical point stands on its own: **when you compare MTP at depth, keep the KV types identical in both arms.** A q8_0/q8_0 baseline would have credited this card with +57% instead of +109%.
+
+Caveats: the desktop shared the card (~1.1-1.2 GiB), which is fine for the paired delta but may cost absolute tok/s. The depth numbers come from one document and three task types at temperature 0, so they are a throughput shape, not a quality or agent-traffic claim. Real agent acceptance at depth remains unmeasured here. The copy task produced byte-identical output in both arms, while essay and code diverge at temperature 0 because different verify batch sizes change the float rounding. Raw data, harness and exact argv: [victoralcazardev/rx7900xtx-local-llm](https://github.com/victoralcazardev/rx7900xtx-local-llm), under `results/20260927-probe-ab-262k/` and `results/20260927-depth-240k-none-vs-n3/`.
