@@ -608,3 +608,88 @@ With F16 K/V, temperature 1.0, top-p 0.95, top-k 20, presence penalty 0, seed 42
 A separate **single-run completion screen** per arm, with an 8,192-token budget, finished with EOS: baseline 6,074 tokens at 68.2 tok/s in 89.15 s; MTP-6 5,613 tokens at 166.1 tok/s in 33.96 s. Both returned a feasible 280-minute schedule and matching lower bound on manual review. Output lengths differ, so the wall-time ratio is not a fixed-work speedup or a broad quality result.
 
 The original exploration contains 194 measured requests across 35 arms; the fresh main-table confirmation adds 18 requests across two arms. There were no failed configurations or cached-prompt requests. One original EOS-terminated reasoning baseline reported 6,074 server tokens versus 6,073 streamed token IDs; that discrepancy is retained, and rates consistently use server timings. All fixed-length runs matched counts exactly. Generated code was not executed, and capped outputs are performance workloads, not complete-code correctness tests. No thermal-limit observations were recorded in the follow-up phases; the initial core phase recorded temperature/clock samples and a separate no-throttling spot check. GPU power-limit activity was logged with stock power caps left enabled.
+
+## Dual RTX 3090 (MSI Gaming X Trio + Gigabyte OC)
+
+### Run 2 — full n-max sweeps, per-prompt medians, acceptance
+
+**Setup:** Two RTX 3090 24GB (MSI Gaming X Trio, Gigabyte Gaming OC) on
+PCIe 4.0 x16, PHB topology, no NVLink. unsloth Qwen3.8-27B Q4_K_M, 131K
+context, q4_0 KV cache, flash attention on, `--split-mode tensor
+--tensor-split 1,1`, `--parallel 1`, llama.cpp `4364bf723` (local build
+613, CUDA, SM86), driver 580.119.02, Ubuntu, headless.
+
+**Method:** 3 runs x 3 prompts (code/prose/bash), thinking off, warmup
+discarded. Table values are medians of the three runs per n-max.
+Acceptance from `print_timing` draft lines, min-max across the 10 timed
+tasks (warmup task excluded).
+
+#### Dual tensor-split 1:1
+
+| n-max | overall | code | prose | bash | acceptance (min-max) |
+|-------|---------|------|-------|------|----------------------|
+| 0 (baseline) | 42.1 | 42.1 | 42.2 | 42.0 | — |
+| 2 | 71.2 | 81.5 | 63.6 | 71.2 | 0.602-0.939 |
+| 3 | 74.0 | 89.4 | 56.6 | 74.0 | 0.388-0.944 |
+| 4 | **74.9** | **92.0** | **54.2** | **74.9** | 0.377-0.894 |
+
+n-max 4 is the dual-card peak: **+78% over baseline (1.78x)**. n-max 3 is
+within 1.2% (74.0 vs 74.9) with slightly better prose (56.6 vs 54.2). The
+code prompt carries the most of the gain (42.1 → 92.0, +119%); prose is
+the weakest prompt (+28% at n4). As depth grows the per-task acceptance
+floor drops (0.602 at n2 → 0.377 at n4) while mean draft length grows
+(2.2-3.0 → 2.5-4.6 tokens/step) — the throughput gain is length-per-step,
+not acceptance rate.
+
+#### Single card (GPU 0: MSI Gaming X Trio)
+
+| n-max | overall | code | prose | bash | acceptance (min-max) |
+|-------|---------|------|-------|------|----------------------|
+| 0 (baseline) | 38.6 | 38.7 | 38.6 | 38.3 | — |
+| 2 | 64.9 | 69.4 | 54.0 | 64.9 | 0.590-0.963 |
+| 3 | **69.1** | **76.7** | **49.4** | **69.1** | 0.449-0.946 |
+| 4 | 66.4 | 80.5 | 46.2 | 66.4 | 0.381-0.876 |
+
+n-max 3 is the MSI peak: **+79% (1.79x)**; n4 drops 3.9% (66.4 vs 69.1)
+— the depth the dual pair tolerates (dual n4 > dual n3).
+
+#### Single card (GPU 1: Gigabyte Gaming OC)
+
+| n-max | overall | code | prose | bash | acceptance (min-max) |
+|-------|---------|------|-------|------|----------------------|
+| 0 (baseline) | 37.6 | 37.9 | 37.6 | 37.2 | — |
+| 2 | 59.6 | 70.0 | 51.7 | 59.6 | 0.573-0.963 |
+| 3 | 64.0 | 76.0 | 49.9 | 64.0 | 0.437-0.945 |
+| 4 | **64.3** | **81.8** | **44.6** | **64.3** | 0.310-0.889 |
+
+n-max 4 is the Gigabyte peak: **+71% (1.71x)**, within 0.5% of n3
+(64.3 vs 64.0) — the two depths are a practical tie.
+
+#### AIB cross-check (overall medians)
+
+| n-max | MSI (GPU 0) | Gigabyte (GPU 1) | MSI edge |
+|-------|-------------|------------------|----------|
+| 0 | 38.6 | 37.6 | +2.7% |
+| 2 | 64.9 | 59.6 | +8.9% |
+| 3 | 69.1 | 64.0 | +8.0% |
+| 4 | 66.4 | 64.3 | +3.3% |
+
+The MSI card is faster at **every** n-max in this run, and the gap
+widens with draft depth (+2.7% at baseline → +8.9% at n2). A single run
+per board cannot separate a board-level difference (VBIOS/power target)
+from run-to-run variance; the direction is consistent, the size is not
+established. The two boards also disagree on optimum depth: MSI peaks at
+n3, Gigabyte at n4 (by 0.5%).
+
+#### Dual vs single
+
+The dual baseline (42.1) is 9.1% above the best single-card baseline
+(MSI 38.6); the dual peak (74.9 at n4) is 8.4% above the best single
+peak (MSI 69.1 at n3). With PHB topology (no NVLink) the tensor-split
+benefit is modest — the two cards do not act as a zero-overhead 48 GB
+pool, matching the P40/SYS-path cost the repo already documents.
+
+#### Raw data
+
+Per-run JSON available from the contributor on request (repo keeps rows +
+footnotes only, per CONTRIBUTING.md).
