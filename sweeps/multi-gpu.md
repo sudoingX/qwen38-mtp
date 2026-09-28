@@ -611,80 +611,83 @@ The original exploration contains 194 measured requests across 35 arms; the fres
 
 ## Dual RTX 3090 (MSI Gaming X Trio + Gigabyte OC)
 
-### Run 2 — per-prompt medians, acceptance, and the single-card cross-check
+### Run 2 — full n-max sweeps, per-prompt medians, acceptance
 
-**Setup:** Two RTX 3090 24GB (MSI Gaming X Trio, Gigabyte OC) on PCIe 4.0 x16,
-PHB topology, no NVLink. unsloth Qwen3.8-27B Q4_K_M, 131K context, q4_0 KV
-cache, flash attention on, `--split-mode tensor --tensor-split 1,1`,
-`--parallel 1`, llama.cpp `4364bf723` (local build 613, CUDA, SM86),
-Ubuntu / CUDA, driver 580.119.02.
+**Setup:** Two RTX 3090 24GB (MSI Gaming X Trio, Gigabyte Gaming OC) on
+PCIe 4.0 x16, PHB topology, no NVLink. unsloth Qwen3.8-27B Q4_K_M, 131K
+context, q4_0 KV cache, flash attention on, `--split-mode tensor
+--tensor-split 1,1`, `--parallel 1`, llama.cpp `4364bf723` (local build
+613, CUDA, SM86), driver 580.119.02, Ubuntu, headless.
 
 **Method:** 3 runs x 3 prompts (code/prose/bash), thinking off, warmup
-discarded. Table values are medians of the three runs per n-max. Acceptance
-from `/metrics` (`llamacpp:spec_decode_num_*`).
+discarded. Table values are medians of the three runs per n-max.
+Acceptance from `print_timing` draft lines, min-max across the 10 timed
+tasks (warmup task excluded).
 
 #### Dual tensor-split 1:1
 
-| n-max | overall | code | prose | bash | acceptance (min-mid-max) |
-|-------|---------|------|-------|------|--------------------------|
-| 0 (baseline) | 42.1 | 38.7 | 45.5 | 42.9 | — |
-| 3 | 72.8 | 83.9 | 47.0 | 85.0 | 0.377-0.685-0.894 |
-| 4 | **74.9** | **92.0** | **54.2** | **74.9** | 0.377-0.685-0.894 |
+| n-max | overall | code | prose | bash | acceptance (min-max) |
+|-------|---------|------|-------|------|----------------------|
+| 0 (baseline) | 42.1 | 42.1 | 42.2 | 42.0 | — |
+| 2 | 71.2 | 81.5 | 63.6 | 71.2 | 0.602-0.939 |
+| 3 | 74.0 | 89.4 | 56.6 | 74.0 | 0.388-0.944 |
+| 4 | **74.9** | **92.0** | **54.2** | **74.9** | 0.377-0.894 |
 
-n-max 4 is the dual-card peak: +78% over baseline (1.78x). n-max 3 is within
-3% (72.8 vs 74.9) with slightly better prose (47.0 vs 54.2) and bash (85.0
-vs 74.9). The code prompt carries most of the gain (92.0 vs 38.7 baseline,
-+138%); prose is the weakest prompt (+19% at n4).
+n-max 4 is the dual-card peak: **+78% over baseline (1.78x)**. n-max 3 is
+within 1.2% (74.0 vs 74.9) with slightly better prose (56.6 vs 54.2). The
+code prompt carries the most of the gain (42.1 → 92.0, +119%); prose is
+the weakest prompt (+28% at n4). As depth grows the per-task acceptance
+floor drops (0.602 at n2 → 0.377 at n4) while mean draft length grows
+(2.2-3.0 → 2.5-4.6 tokens/step) — the throughput gain is length-per-step,
+not acceptance rate.
 
-#### Single-card (GPU 0: MSI Gaming X Trio)
+#### Single card (GPU 0: MSI Gaming X Trio)
 
-| n-max | overall | code | prose | bash | acceptance (min-mid-max) |
-|-------|---------|------|-------|------|--------------------------|
-| 0 (baseline) | 38.6 | 38.7 | 38.3 | 38.9 | — |
-| 2 | 64.9 | 69.6 | 59.4 | 61.7 | 0.384-0.702-0.946 |
-| 3 | **69.1** | **76.7** | **49.4** | **69.1** | 0.449-0.657-0.946 |
-| 4 | 66.4 | 74.0 | 42.3 | 68.6 | 0.451-0.650-0.951 |
+| n-max | overall | code | prose | bash | acceptance (min-max) |
+|-------|---------|------|-------|------|----------------------|
+| 0 (baseline) | 38.6 | 38.7 | 38.6 | 38.3 | — |
+| 2 | 64.9 | 69.4 | 54.0 | 64.9 | 0.590-0.963 |
+| 3 | **69.1** | **76.7** | **49.4** | **69.1** | 0.449-0.946 |
+| 4 | 66.4 | 80.5 | 46.2 | 66.4 | 0.381-0.876 |
 
-n-max 3 is the single-card peak: +79% over baseline (1.79x). n-max 4 drops
-3.6% (66.4 vs 69.1) — the same depth-turn that the dual card avoids (dual
-n4 > dual n3).
+n-max 3 is the MSI peak: **+79% (1.79x)**; n4 drops 3.9% (66.4 vs 69.1)
+— the depth the dual pair tolerates (dual n4 > dual n3).
 
-#### Single-card (GPU 1: Gigabyte OC)
+#### Single card (GPU 1: Gigabyte Gaming OC)
 
-| n-max | overall | code | prose | bash | acceptance (min-mid-max) |
-|-------|---------|------|-------|------|--------------------------|
-| 0 (baseline) | 38.6 | 38.8 | 38.4 | 38.8 | — |
-| 2 | 65.3 | 70.4 | 59.4 | 61.9 | 0.428-0.707-0.943 |
-| 3 | **67.4** | **76.4** | **51.1** | **67.4** | 0.449-0.667-0.863 |
-| 4 | 66.1 | 71.8 | 41.9 | 67.9 | 0.445-0.613-0.843 |
+| n-max | overall | code | prose | bash | acceptance (min-max) |
+|-------|---------|------|-------|------|----------------------|
+| 0 (baseline) | 37.6 | 37.9 | 37.6 | 37.2 | — |
+| 2 | 59.6 | 70.0 | 51.7 | 59.6 | 0.573-0.963 |
+| 3 | 64.0 | 76.0 | 49.9 | 64.0 | 0.437-0.945 |
+| 4 | **64.3** | **81.8** | **44.6** | **64.3** | 0.310-0.889 |
 
-n-max 3 is the single-card peak: +75% over baseline (1.75x). n-max 4 drops
-1.9% (66.1 vs 67.4).
+n-max 4 is the Gigabyte peak: **+71% (1.71x)**, within 0.5% of n3
+(64.3 vs 64.0) — the two depths are a practical tie.
 
-#### Single-card cross-check
+#### AIB cross-check (overall medians)
 
-GPU 0 and GPU 1 agree within 1.1% at every n-max:
+| n-max | MSI (GPU 0) | Gigabyte (GPU 1) | MSI edge |
+|-------|-------------|------------------|----------|
+| 0 | 38.6 | 37.6 | +2.7% |
+| 2 | 64.9 | 59.6 | +8.9% |
+| 3 | 69.1 | 64.0 | +8.0% |
+| 4 | 66.4 | 64.3 | +3.3% |
 
-| n-max | GPU 0 | GPU 1 | delta |
-|-------|-------|-------|-------|
-| 0 | 38.6 | 38.6 | 0.0% |
-| 2 | 64.9 | 65.3 | +0.6% |
-| 3 | 69.1 | 67.4 | −2.5% |
-| 4 | 66.4 | 66.1 | −0.5% |
-
-The MSI Gaming X Trio and Gigabyte OC are indistinguishable on this
-workload at this context. The n-max 3 gap (69.1 vs 67.4, −2.5%) is the
-largest divergence and is within the per-prompt spread (prose 49.4 vs 51.1).
+The MSI card is faster at **every** n-max in this run, and the gap
+widens with draft depth (+2.7% at baseline → +8.9% at n2). A single run
+per board cannot separate a board-level difference (VBIOS/power target)
+from run-to-run variance; the direction is consistent, the size is not
+established. The two boards also disagree on optimum depth: MSI peaks at
+n3, Gigabyte at n4 (by 0.5%).
 
 #### Dual vs single
 
-The dual tensor-split baseline (42.1) is 3.5 tok/s (9%) higher than the
-single-card baseline (38.6). The dual n-max 4 peak (74.9) is 8.8 tok/s
-(13%) higher than the best single-card n-max 3 (69.1). The tensor-split
-pair starts higher and peaks higher, but the gain from tensor-splitting is
-modest (+9% baseline, +13% peak) — the PHB topology (no NVLink) keeps the
-inter-GPU cost on the P40/SYS order, so the two cards are not acting as a
-unified 48 GB pool with zero overhead.
+The dual baseline (42.1) is 9.1% above the best single-card baseline
+(MSI 38.6); the dual peak (74.9 at n4) is 8.4% above the best single
+peak (MSI 69.1 at n3). With PHB topology (no NVLink) the tensor-split
+benefit is modest — the two cards do not act as a zero-overhead 48 GB
+pool, matching the P40/SYS-path cost the repo already documents.
 
 #### Raw data
 
