@@ -172,3 +172,58 @@ byte-identical greedy gate will see it.
 Sample spreads: 3.3% or less across the n-max sweep, except gated n-max 4 on code
 at 4.5%; 4.9% on the 1,024-token prose baseline and 3.5% or less on the rest of
 that series; 2.3% and 1.5% on the depth pair.
+
+### RTX PRO 5000 Blackwell 48GB: n-max and KV sweep
+
+_by [@davidpgil](https://github.com/davidpgil), PR #90_
+
+Same RTX PRO 5000 Blackwell 48GB host and serving configuration as the
+community row above: unsloth/Qwen3.8-27B-GGUF UD-Q6_K_XL, 262,144 context,
+q8_0 K/V cache, llama.cpp mainline, Linux/CUDA, `--parallel 1`. Metric =
+effective tok/s = gen_speed × acceptance, from llama-server `timings`. The
+community-row numbers are medians of 3 runs; the sweep tables below are
+single-run screens labeled as such (per CONTRIBUTING rule 4).
+
+#### n-max sweep (q8_0 KV, batch 4096)
+
+| n-max | gen tok/s | acceptance | eff tok/s | vs baseline |
+| --- | --- | --- | --- | --- |
+| spec off | 42.9 | — | 42.9 | — |
+| 2 | 89.4 | 0.86 | 77.1 | +79% |
+| **3** | **109.2** | **0.89** | **97.5** | **+127%** |
+| 4 | 109.8 | 0.77 | 84.2 | +96% |
+
+The peak is n-max 3, not 2. Deeper drafting (n-max 4) raises raw generation
+speed but collapses acceptance from 0.89 to 0.77, and effective throughput
+falls. This matches the A6000 48GB shape — deeper than 2 helps until the
+acceptance decay eats the win — and on this card the balance tips at 3.
+
+#### KV cache precision (n-max 3)
+
+| KV | gen tok/s | acceptance | eff tok/s |
+| --- | --- | --- | --- |
+| q8_0 | 109.2 | 0.89 | 97.5 |
+| q4_0 | 104.6 | 0.84 | 88.0 |
+
+q8_0 KV beats q4_0 on this GPU-resident card — enough bandwidth that KV
+precision wins over reduced per-token pressure. (Contrast the CPU/RAM MoE
+finding where q4_0 helped; different topology, different answer.)
+
+#### batch and n-min (n-max 3, q8_0 KV)
+
+| batch | n-min | eff tok/s |
+| --- | --- | --- |
+| 4096 | 2 | 97.5 |
+| 8192 | 2 | 89.4 |
+| 4096 | 1 | 92.8 |
+
+batch 4096 and n-min 2 confirmed optimal.
+
+#### Methodology note — the SPEC_TYPE trap
+
+The production script hardcodes `--spec-type draft-mtp` and has no `SPEC_TYPE`
+env override, so `SPEC_TYPE=none` is silently ignored and a "baseline" served
+with that env var actually runs MTP-on. The baseline here was verified by
+checking the running server's actual args (draft args stripped, `--spec-type
+none`), not by env intent. The true MTP-off baseline is 42.9 tok/s; MTP is a
+**+126%** win at n-max 3.
