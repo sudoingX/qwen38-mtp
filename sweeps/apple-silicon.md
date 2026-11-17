@@ -129,3 +129,56 @@ Mac Studio with Apple M3 Ultra and 96 GB unified memory, macOS/Metal, unsloth Q6
 | MTP n-max 4, ungated | 18.1 | 21.8 | 11.5 | 18.1 | 0.33-0.93 (65.1% aggregate) |
 
 N-max 2 is the mixed-workload setting here: 22.8 → 24.2 tok/s (+6.1%). It improves both code prompts while the prose prompt regresses 11.8%, so the modest overall gain should not be read as a universal speedup. Deeper drafts lose rapidly, and the 0.60 gate is a useful counterexample to treating acceptance as the goal: it raises aggregate acceptance from 79.8% to 86.9% but lowers overall throughput from 24.2 to 19.9 tok/s. On this Q6/Metal configuration, keep the shallow, ungated setting for throughput; do not copy the deep or gated stacks from bandwidth-starved APUs.
+
+
+### MacBook Pro (M5 Max, 128GB UMA, Metal): Q4_K_M and Q8_0 at n-max 2, stock and unsloth b12340
+*by [@Biblejustin](https://github.com/Biblejustin)*
+
+Setup, builds and method: the MacBook Pro M5 Max footnote under the [community table](../README.md#community-numbers).
+
+**Passes and per-prompt medians, tok/s**
+
+| quant | llama.cpp | arm | pass 1 | pass 2 | pass 3 | row | P1 code (py) | P2 prose (mmap) | P3 code (bash) | acceptance |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| Q4_K_M | stock b12340 | spec off | 24.9 | 23.7 | 25.4 | 24.9 | 25.5 | 24.9 | 24.2 | - |
+| Q4_K_M | stock b12340 | n-max 2 | 36.6 | 37.7 | 36.0 | **36.6** | 42.9 | 30.9 | 37.3 | 0.51-0.96 (4,918/6,218 = 0.791) |
+| Q4_K_M | unsloth b12340-mix | spec off | 25.0 | 25.2 | 25.5 | 25.2 | 25.5 | 25.3 | 25.0 | - |
+| Q4_K_M | unsloth b12340-mix | n-max 2 | 37.1 | 37.6 | 37.0 | **37.1** | 45.0 | 31.3 | 37.1 | 0.50-0.95 (4,483/5,737 = 0.781) |
+| Q8_0 | stock b12340 | spec off | 17.5 | 17.2 | 18.0 | 17.5 | 17.8 | 17.1 | 17.5 | - |
+| Q8_0 | stock b12340 | n-max 2 | 33.1 | 35.3 | 34.9 | **34.9** | 39.0 | 28.5 | 34.9 | 0.51-0.95 (4,593/5,805 = 0.791) |
+| Q8_0 | unsloth b12340-mix | spec off | 17.6 | 18.1 | 18.3 | 18.1 | 18.2 | 18.1 | 17.7 | - |
+| Q8_0 | unsloth b12340-mix | n-max 2 | 34.1 | 33.4 | 35.4 | **34.1** | 39.2 | 28.6 | 34.1 | 0.52-0.95 (4,559/5,755 = 0.792) |
+
+**Gain by prompt, computed from the rounded figures above**
+
+| quant | llama.cpp | overall | P1 code (py) | P2 prose (mmap) | P3 code (bash) |
+|---|---|---:|---:|---:|---:|
+| Q4_K_M | stock b12340 | +47.0% | +68.2% | **+24.1%** | +54.1% |
+| Q4_K_M | unsloth b12340-mix | +47.2% | +76.5% | **+23.7%** | +48.4% |
+| Q8_0 | stock b12340 | +99.4% | +119.1% | **+66.7%** | +99.4% |
+| Q8_0 | unsloth b12340-mix | +88.4% | +115.4% | **+58.0%** | +92.7% |
+
+**Apple rows side by side**
+
+| machine | quant, context | llama.cpp | baseline | n-max 2 | overall | prose prompt |
+|---|---|---|---:|---:|---:|---:|
+| M4 24GB | UD-Q3_K_XL, 32K | b10450 (Homebrew) | 5.8 | 5.8 | parity | -22 to -24% |
+| M3 Ultra 96GB | Q6_K, 131K | LM Studio `dd1ea52` | 22.8 | 24.2 | +6.1% | -11.8% |
+| M5 Max 128GB | Q4_K_M, 131K | stock b12340 | 24.9 | 36.6 | +47.0% | +24.1% |
+| M5 Max 128GB | Q4_K_M, 131K | unsloth b12340-mix | 25.2 | 37.1 | +47.2% | +23.7% |
+| M5 Max 128GB | Q8_0, 131K | stock b12340 | 17.5 | 34.9 | +99.4% | +66.7% |
+| M5 Max 128GB | Q8_0, 131K | unsloth b12340-mix | 18.1 | 34.1 | +88.4% | +58.0% |
+
+**Memory, MiB, peak during one 400-token request**
+
+| quant | llama.cpp | arm | GPU memory in use (MiB) | process RSS (MiB) | phys_footprint (MiB) |
+|---|---|---|---:|---:|---:|
+| - | - | before load | 19-20 | - | - |
+| Q4_K_M | stock b12340 | spec off | 18,931 | 18,877 | 3,159 |
+| Q4_K_M | stock b12340 | n-max 2 | 20,617 | 20,282 | 4,021 |
+| Q4_K_M | unsloth b12340-mix | spec off | 18,964 | 18,884 | 3,159 |
+| Q4_K_M | unsloth b12340-mix | n-max 2 | 20,617 | 20,282 | 4,022 |
+| Q8_0 | stock b12340 | spec off | 29,591 | 29,933 | 3,164 |
+| Q8_0 | stock b12340 | n-max 2 | 31,397 | 31,666 | 4,025 |
+| Q8_0 | unsloth b12340-mix | spec off | 29,590 | 29,942 | 3,165 |
+| Q8_0 | unsloth b12340-mix | n-max 2 | 31,396 | 31,671 | 4,025 |
